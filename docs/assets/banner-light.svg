@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
+  <title id="t">Claude Guardrails</title>
+  <desc id="d">Enterprise guardrails for Claude Code and the Claude API</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7F8FC"/>
+      <stop offset="1" stop-color="#EEF1FB"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#4F46E5" stroke-opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="24" fill="url(#grid)"/>
+
+  <!-- layered shield: four rings = four enforcement layers -->
+  <g transform="translate(130 160)">
+    <circle r="112" fill="none" stroke="#4F46E5" stroke-opacity="0.10" stroke-width="2"/>
+    <circle r="92" fill="none" stroke="#4F46E5" stroke-opacity="0.16" stroke-width="2"/>
+    <circle r="72" fill="none" stroke="#0D9488" stroke-opacity="0.22" stroke-width="2"/>
+    <path d="M0 -58 L46 -40 V2 C46 32 26 52 0 62 C-26 52 -46 32 -46 2 V-40 Z" fill="url(#shield)"/>
+    <path d="M-18 2 L-5 15 L20 -12" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="290" y="138" font-size="64" font-weight="800" fill="#111827" letter-spacing="-1.5">Claude Guardrails</text>
+    <text x="292" y="186" font-size="25" font-weight="500" fill="#374151">Enterprise guardrails for Claude Code &amp; the Claude API</text>
+    <text x="292" y="222" font-size="19" fill="#6B7280">Fast for everyday work. Strict on secrets, personal data, network access and infrastructure.</text>
+    <g font-size="15" font-weight="600">
+      <rect x="292" y="248" width="148" height="32" rx="16" fill="#4F46E5" fill-opacity="0.10"/>
+      <text x="366" y="269" text-anchor="middle" fill="#4338CA">Hooks + sandbox</text>
+      <rect x="452" y="248" width="132" height="32" rx="16" fill="#0D9488" fill-opacity="0.10"/>
+      <text x="518" y="269" text-anchor="middle" fill="#0F766E">Pre-commit</text>
+      <rect x="596" y="248" width="150" height="32" rx="16" fill="#4F46E5" fill-opacity="0.10"/>
+      <text x="671" y="269" text-anchor="middle" fill="#4338CA">CI merge gate</text>
+      <rect x="758" y="248" width="162" height="32" rx="16" fill="#0D9488" fill-opacity="0.10"/>
+      <text x="839" y="269" text-anchor="middle" fill="#0F766E">API middleware</text>
+    </g>
+  </g>
+</svg>
