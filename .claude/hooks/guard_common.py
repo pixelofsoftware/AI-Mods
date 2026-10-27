@@ -1,0 +1,152 @@
+"""Shared helpers for the Claude Code guardrail hooks.
+
+Hooks receive the event as JSON on stdin and answer with JSON on stdout
+(https://code.claude.com/docs/en/hooks). Detection patterns come from
+scripts/claude_safeguard.py so the API wrapper and the hooks never drift apart.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import hashlib
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, Optional
+
+# .claude/hooks/guard_common.py -> repository root
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_DIR / "scripts"))
+
+from claude_safeguard import (  # noqa: E402  (import after sys.path setup)
+    CREDENTIAL_CATEGORIES,
+    Redactor,
+    Severity,
+    detect_prompt_injection,
+)
+
+__all__ = [
+    "CREDENTIAL_CATEGORIES",
+    "Redactor",
+    "Severity",
+    "detect_prompt_injection",
+    "SECRET_PATH_RE",
+    "GUARDRAIL_PATH_RE",
+    "IAC_PATH_RE",
+    "SECURITY_CRITICAL_PATH_RE",
+    "read_event",
+    "pre_tool_decision",
+    "audit",
+    "fingerprint",
+]
+
+AUDIT_DIR = PROJECT_DIR / ".claude" / "audit"
+
+# Files that hold secrets. `.env.example` style templates stay usable.
+SECRET_PATH_RE = re.compile(
+    r"""(?ix)
+    (?:^|[/\\])\.env(?:\.(?!example$|sample$|template$|dist$|defaults$)[\w.\-]+)?$
+  | (?:^|[/\\])(?:id_rsa|id_dsa|id_ecdsa|id_ed25519)$
+  | \.(?:pem|key|p12|pfx|jks|keystore|kdbx|ppk|asc|gpg)$
+  | (?:^|[/\\])\.(?:aws|ssh|gnupg|kube|docker|azure)(?:[/\\]|$)
+  | (?:^|[/\\])\.config[/\\]gcloud(?:[/\\]|$)
+  | (?:^|[/\\])\.(?:netrc|npmrc|pypirc|pgpass|git-credentials)$
+  | \.tfstate(?:\.backup)?$
+  | (?:^|[/\\])secrets?[/\\]
+  | (?:^|[/\\])(?:credentials|client_secrets?|service[-_]?account[\w\-]*)\.json$
+  | ^/etc/(?:shadow|gshadow|sudoers)
+    """
+)
+
+# Changes to the guardrails themselves always need a human.
+GUARDRAIL_PATH_RE = re.compile(
+    r"""(?x)
+    (?:^|/)\.claude/
+  | (?:^|/)\.mcp\.json$
+  | (?:^|/)CLAUDE\.md$
+  | (?:^|/)scripts/claude_safeguard\.py$
+  | (?:^|/)scripts/precommit/
+  | (?:^|/)\.pre-commit-config\.yaml$
+  | (?:^|/)\.gitleaks\.toml$
+  | (?:^|/)(?:\.github/)?CODEOWNERS$
+  | (?:^|/)config/claude-guardrails-policy\.json$
+  | (?:^|/)\.github/workflows/
+    """
+)
+
+# Infrastructure-as-code: AI-generated changes require human-in-the-loop review.
+IAC_PATH_RE = re.compile(
+    r"""(?ix)
+    \.(?:tf|tfvars|hcl|bicep)$
+  | (?:^|/)(?:Dockerfile|Containerfile)(?:\.[\w\-]+)?$
+  | (?:^|/)(?:docker-)?compose(?:\.[\w\-]+)?\.ya?ml$
+  | (?:^|/)(?:k8s|kubernetes|manifests|helm|charts|kustomize|deploy|deployment|infra|terraform|ansible|cloudformation|cdk)/.+\.(?:ya?ml|json|j2|ts|py)$
+  | (?:^|/)(?:serverless|skaffold|template)\.ya?ml$
+  | \.template\.(?:json|ya?ml)$
+    """
+)
+
+# Security-critical application code: auth, crypto, access control.
+SECURITY_CRITICAL_PATH_RE = re.compile(
+    r"(?i)(?:^|/)(?:auth|authn|authz|oauth|sso|saml|security|crypto|iam|rbac|acl|permissions?|secrets?|keys?)(?:/|\.\w+$|_)"
+)
+
+
+def read_event() -> Dict[str, Any]:
+    raw = sys.stdin.read()
+    try:
+        return json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def fingerprint(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def pre_tool_decision(decision: str, reason: str) -> None:
+    """Emit a PreToolUse decision ("deny" or "ask") and exit 0."""
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": decision,
+                    "permissionDecisionReason": f"[AI guardrail] {reason}",
+                }
+            }
+        )
+    )
+    sys.exit(0)
+
+
+def audit(hook: str, event: Dict[str, Any], decision: str, rules: Iterable[str], extra: Optional[Dict[str, Any]] = None) -> None:
+    """Append a metadata-only record to .claude/audit/guardrail-events.jsonl.
+
+    Never records prompt text, file content or full commands, only rule names
+    and a short fingerprint. The directory is gitignored and blocked by pre-commit.
+    Set CLAUDE_GUARDRAIL_AUDIT=0 to disable.
+    """
+    if os.environ.get("CLAUDE_GUARDRAIL_AUDIT", "1") == "0":
+        return
+    record = {
+        "@timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "hook": hook,
+        "session_id": event.get("session_id"),
+        "event": event.get("hook_event_name"),
+        "tool": event.get("tool_name"),
+        "permission_mode": event.get("permission_mode"),
+        "decision": decision,
+        "rules": sorted(set(rules)),
+        "user": os.environ.get("USER") or os.environ.get("USERNAME"),
+    }
+    if extra:
+        record.update(extra)
+    try:
+        AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+        with open(AUDIT_DIR / "guardrail-events.jsonl", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError:
+        pass  # auditing must never break the developer's session

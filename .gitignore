@@ -1,0 +1,47 @@
+# --- Claude Code: personal and session data (never commit) ---
+.claude/settings.local.json
+.claude/audit/
+.claude/**/*.jsonl
+.claude/projects/
+.claude/todos/
+.claude/shell-snapshots/
+.claude.json
+.claude.json.backup*
+CLAUDE.local.md
+.mcp.local.json
+*.mcp.local.json
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+id_ecdsa*
+!*.pub
+credentials.json
+client_secret*.json
+service-account*.json
+.netrc
+.npmrc
+.pypirc
+
+# --- Terraform state ---
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/

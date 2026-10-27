@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "description": "Machine-readable guardrail baseline. scripts/precommit/check_ai_guardrails.py fails the commit when .claude/settings.json or .mcp.json drift from it. Changes need security review (CODEOWNERS).",
+  "approved_mcp_url_patterns": [
+    "https://*.mcp.internal.example.com/*"
+  ],
+  "approved_mcp_commands": [],
+  "required_settings": {
+    "permissions.disableBypassPermissionsMode": "disable",
+    "enableAllProjectMcpServers": false,
+    "sandbox.enabled": true,
+    "sandbox.allowUnsandboxedCommands": false
+  },
+  "forbidden_default_modes": [
+    "bypassPermissions",
+    "auto",
+    "acceptEdits"
+  ],
+  "required_deny_rules": [
+    "WebSearch",
+    "Bash(curl *)",
+    "Bash(wget *)",
+    "Bash(nc *)",
+    "Bash(sudo *)",
+    "Bash(git push --force *)",
+    "Bash(git commit --no-verify *)",
+    "Bash(terraform apply *)",
+    "Bash(terraform destroy *)",
+    "Read(**/.env)",
+    "Read(**/*.pem)",
+    "Read(~/.ssh/**)",
+    "Read(~/.aws/**)"
+  ],
+  "required_ask_rules": [
+    "WebFetch",
+    "Bash(git push *)",
+    "Edit(**/*.tf)",
+    "Edit(/.claude/**)"
+  ],
+  "forbidden_allow_rules": [
+    "Bash",
+    "Bash(*)",
+    "WebFetch",
+    "WebFetch(domain:*)",
+    "WebSearch",
+    "Bash(curl *)",
+    "Bash(wget *)",
+    "Bash(sudo *)",
+    "Bash(git push *)",
+    "Bash(terraform apply *)"
+  ],
+  "required_hooks": {
+    "UserPromptSubmit": ["prompt_guard.py"],
+    "PreToolUse": ["bash_guard.py", "file_guard.py"]
+  },
+  "forbidden_paths": [
+    ".claude/settings.local.json",
+    ".claude/audit/*",
+    ".claude/**/*.jsonl",
+    ".claude/projects/*",
+    ".claude/todos/*",
+    ".claude/shell-snapshots/*",
+    ".claude.json",
+    ".claude.json.backup*",
+    "CLAUDE.local.md",
+    ".mcp.local.json",
+    "*.mcp.local.json",
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*.jks",
+    "id_rsa*",
+    "id_ed25519*",
+    "id_ecdsa*",
+    "*.tfstate",
+    "*.tfstate.backup",
+    "credentials.json",
+    "client_secret*.json",
+    "service-account*.json",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    "anthropic_api_key*",
+    "*.anthropic-key"
+  ],
+  "allowed_paths": [
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+    "*.pub"
+  ]
+}
