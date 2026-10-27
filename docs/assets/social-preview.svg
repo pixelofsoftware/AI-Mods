@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="t d">
+  <title id="t">Claude Guardrails</title>
+  <desc id="d">Enterprise guardrails for Claude Code and the Claude API</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#818CF8" stroke-opacity="0.07"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+
+  <!-- layered shield: four rings = four enforcement layers -->
+  <g transform="translate(640 172)">
+    <circle r="124" fill="none" stroke="#818CF8" stroke-opacity="0.14" stroke-width="2"/>
+    <circle r="102" fill="none" stroke="#818CF8" stroke-opacity="0.22" stroke-width="2"/>
+    <circle r="80" fill="none" stroke="#2DD4BF" stroke-opacity="0.30" stroke-width="2"/>
+    <path d="M0 -64 L51 -44 V2 C51 35 29 57 0 68 C-29 57 -51 35 -51 2 V-44 Z" fill="url(#shield)"/>
+    <path d="M-20 2 L-6 16 L22 -13" fill="none" stroke="#0F172A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="640" y="384" font-size="76" font-weight="800" fill="#F9FAFB" letter-spacing="-2">Claude Guardrails</text>
+    <text x="640" y="436" font-size="29" font-weight="500" fill="#D1D5DB">Enterprise guardrails for Claude Code &amp; the Claude API</text>
+    <g font-size="18" font-weight="600">
+      <rect x="270" y="476" width="184" height="38" rx="19" fill="#818CF8" fill-opacity="0.16"/>
+      <text x="362" y="501" fill="#C7D2FE">Hooks + sandbox</text>
+      <rect x="466" y="476" width="150" height="38" rx="19" fill="#2DD4BF" fill-opacity="0.16"/>
+      <text x="541" y="501" fill="#99F6E4">Pre-commit</text>
+      <rect x="628" y="476" width="172" height="38" rx="19" fill="#818CF8" fill-opacity="0.16"/>
+      <text x="714" y="501" fill="#C7D2FE">CI merge gate</text>
+      <rect x="812" y="476" width="198" height="38" rx="19" fill="#2DD4BF" fill-opacity="0.16"/>
+      <text x="911" y="501" fill="#99F6E4">API middleware</text>
+    </g>
+    <text x="640" y="584" font-size="20" fill="#9CA3AF">github.com/pixelofsoftware/AI-Mods  ·  MIT licensed</text>
+  </g>
+</svg>
