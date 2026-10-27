@@ -1,0 +1,57 @@
+name: False positive
+description: A guard blocked or asked about something that should be allowed.
+title: "False positive: "
+labels: ["false-positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. False positives slow everyone down, so they matter.
+        **Use synthetic data only.** Never paste a real secret, key or personal data, even an expired one.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which guard?
+      options:
+        - prompt_guard (prompts)
+        - bash_guard (shell commands)
+        - file_guard (file writes)
+        - read_guard (file reads)
+        - claude_safeguard.py (Claude API middleware)
+        - pre-commit or CI check
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: rule
+    attributes:
+      label: Rule name
+      description: Shown in the block message or in `.claude/audit/guardrail-events.jsonl`, for example `network_egress` or `secret_file_access`.
+      placeholder: network_egress
+  - type: textarea
+    id: input
+    attributes:
+      label: What triggered it
+      description: The command, prompt, file path or text, with any sensitive values replaced by placeholders.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: message
+    attributes:
+      label: The message you got
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it should be allowed
+      description: What you were trying to do, and why it's safe.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: macOS 15, Python 3.12, Claude Code 2.1.x, commit abc1234

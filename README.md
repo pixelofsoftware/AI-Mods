@@ -319,7 +319,7 @@ Every request is redacted, logged as one JSON line, sent with server-side refusa
 <details>
 <summary>Show the steps</summary>
 
-1. Copy `.claude/`, `.mcp.json`, `CLAUDE.md`, `.pre-commit-config.yaml`, `config/`, `scripts/` and `.github/` into your repository. Also copy the `[tool.bandit]` table from `pyproject.toml` and the entries from `.gitignore`.
+1. Copy `.claude/`, `.mcp.json`, `CLAUDE.md`, `.pre-commit-config.yaml`, `config/`, `scripts/`, `.github/workflows/` and `.github/CODEOWNERS` into your repository. Also copy the `[tool.bandit]` table from `pyproject.toml` and the entries from `.gitignore`.
 2. Adjust the `allow` list in `.claude/settings.json` for your stack (for example `Bash(./gradlew test)`). Keep the deny and ask lists.
 3. Run `scripts/setup_guardrails.sh` and `pre-commit run --all-files`.
 4. Protect `main`: require the `guardrails` check and code-owner review, and block force pushes.
@@ -327,6 +327,20 @@ Every request is redacted, logged as one JSON line, sent with server-side refusa
 See [setup guide, Part D](docs/claude-guardrails-setup.md#part-d-enable-the-guardrails-in-another-repository).
 
 </details>
+
+<a id="make-it-yours"></a>
+
+### 5 · Make it yours
+
+The configuration ships with **example values** for a fictional company. The guardrails work as they are, but replace these before you roll them out:
+
+| Placeholder | Where | Replace with |
+|---|---|---|
+| `*.internal.example.com` hosts | [`.mcp.json`](.mcp.json), [`enterprise/managed-settings.json`](enterprise/managed-settings.json), `sandbox.network.allowedDomains` in [`.claude/settings.json`](.claude/settings.json), [`config/claude-guardrails-policy.json`](config/claude-guardrails-policy.json) | Your MCP servers, OpenTelemetry collector and internal package registry. Update the policy file in the same commit, or the drift check fails |
+| The two sample MCP servers (`internal-docs`, `internal-tickets`) | [`.mcp.json`](.mcp.json) | Your own approved servers. Until you replace them, Claude Code shows both as *failed*; that's harmless |
+| `INTERNAL_MCP_TOKEN` | `.mcp.json` and your shell profile | The environment variable your MCP servers use |
+| *AppSec*, *Platform Engineering*, `#appsec`, `#security-incidents` | [`docs/claude-guardrails.md`](docs/claude-guardrails.md) and the [setup guide](docs/claude-guardrails-setup.md) | Your teams and channels |
+| `@pixelofsoftware` | [`.github/CODEOWNERS`](.github/CODEOWNERS) | Your reviewers or GitHub teams |
 
 <a id="guardrails"></a>
 
@@ -484,6 +498,8 @@ Deployed by admins. Developers can't override it.
 | [`config/claude-guardrails-policy.json`](config/claude-guardrails-policy.json) | The machine-readable baseline that the drift check enforces |
 | [Verification record](.sdlc/claude-guardrails/verification.md) | What has been tested and what still needs a real environment to verify |
 | [Build record](.sdlc/claude-guardrails/) | Requirements, plan, security and quality reviews, and test reports |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) | How to contribute, and how to report a bypass privately |
 
 ## 📁 Repository layout
 
@@ -542,9 +558,11 @@ Guidelines:
 - **If you change a guardrail file**, update [`config/claude-guardrails-policy.json`](config/claude-guardrails-policy.json) in the same PR and explain why the control changes.
 - **Add a test** that fails before your change and passes after it.
 
+The full guide is in [`CONTRIBUTING.md`](CONTRIBUTING.md). To report a false positive, a bug or an idea, [open an issue](https://github.com/pixelofsoftware/AI-Mods/issues/new/choose).
+
 ## 🔐 Reporting a vulnerability
 
-Found a way past a guardrail? Please **don't** open a public issue. Report it privately through [GitHub Security Advisories](https://github.com/pixelofsoftware/AI-Mods/security/advisories/new). Include the payload, the expected decision and the actual decision.
+Found a way past a guardrail? Please **don't** open a public issue. Report it privately through [GitHub Security Advisories](https://github.com/pixelofsoftware/AI-Mods/security/advisories/new). Include the payload, the expected decision and the actual decision. See [`SECURITY.md`](SECURITY.md) for what's in scope and what to expect.
 
 ## 📄 License
 

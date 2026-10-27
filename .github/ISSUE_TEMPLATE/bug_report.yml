@@ -1,0 +1,44 @@
+name: Bug report
+description: "Something doesn't work: installation, a crash, wrong output or a broken doc."
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Found a way past a guard?** Don't file it here. Report it privately through [Security Advisories](https://github.com/pixelofsoftware/AI-Mods/security/advisories/new).
+        **Use synthetic data only** in this report.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `scripts/setup_guardrails.sh`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or logs
+      description: Remove any secrets or personal data first.
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Ubuntu 24.04, Python 3.12, Claude Code 2.1.x, commit abc1234
+    validations:
+      required: true
