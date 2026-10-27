@@ -1,0 +1,78 @@
+# Pre-commit guardrails for AI-assisted development.
+#
+# Install once per clone:   pre-commit install --install-hooks
+# Run on everything:        pre-commit run --all-files
+# CI runs the same file (.github/workflows/ai-guardrails.yml), so `git commit --no-verify`
+# only moves the failure to the pull request.
+#
+# Pinned revisions are bumped by `pre-commit autoupdate` in a reviewed PR.
+
+minimum_pre_commit_version: "3.5.0"
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  # --- Hygiene and cheap secret checks --------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-executables-have-shebangs
+      - id: no-commit-to-branch
+        args: ["--branch", "main", "--branch", "master"]
+
+  # --- Secret detection (entropy + 150+ provider rules) ---------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # --- AI-specific guardrails (this repository) -----------------------------
+  - repo: local
+    hooks:
+      - id: forbid-ai-artifacts
+        name: block Claude session logs, local AI configs and key files
+        entry: python scripts/precommit/check_ai_guardrails.py forbid-paths
+        language: python
+        stages: [pre-commit, pre-push]
+      - id: validate-claude-config
+        name: validate .claude/settings.json and .mcp.json against guardrail policy
+        entry: python scripts/precommit/check_ai_guardrails.py validate-config
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit, pre-push]
+      - id: scan-ai-secrets
+        name: scan for credentials (same detectors as the Claude Code hooks)
+        entry: python scripts/precommit/check_ai_guardrails.py scan-secrets
+        language: python
+        types: [text]
+        exclude: ^(tests/|\.sdlc/)
+
+  # --- SAST on generated code -----------------------------------------------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "--severity-level", "medium", "--confidence-level", "medium"]
+        additional_dependencies: ["bandit[toml]"]
+
+  # IaC and CI misconfiguration: Terraform, CloudFormation, Kubernetes, Helm,
+  # Dockerfiles, GitHub Actions. Covers what tfsec did (tfsec is now part of Trivy).
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.3.30
+    hooks:
+      - id: checkov
+        # Upstream default triggers on *.tf only; also trigger on manifests, Dockerfiles and workflows.
+        files: (\.tf|\.tfvars|\.ya?ml|\.json|\.bicep|(^|/)Dockerfile[^/]*)$
+        args:
+          - "--quiet"
+          - "--compact"
+          - "--framework"
+          - "terraform,cloudformation,kubernetes,helm,dockerfile,github_actions,bicep"

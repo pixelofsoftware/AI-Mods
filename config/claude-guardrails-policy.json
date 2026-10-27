@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "description": "Machine-readable guardrail baseline. scripts/precommit/check_ai_guardrails.py fails the commit when .claude/settings.json or .mcp.json drift from it. Changes need security review (CODEOWNERS).",
+  "approved_mcp_url_patterns": [
+    "https://*.mcp.internal.example.com/*"
+  ],
+  "approved_mcp_commands": [],
+  "required_settings": {
+    "permissions.disableBypassPermissionsMode": "disable",
+    "enableAllProjectMcpServers": false,
+    "sandbox.enabled": true,
+    "sandbox.allowUnsandboxedCommands": false,
+    "sandbox.autoAllowBashIfSandboxed": false,
+    "sandbox.excludedCommands": []
+  },
+  "forbidden_default_modes": [
+    "bypassPermissions",
+    "auto",
+    "acceptEdits"
+  ],
+  "required_deny_rules": [
+    "WebSearch",
+    "Bash(curl *)",
+    "Bash(wget *)",
+    "Bash(nc *)",
+    "Bash(sudo *)",
+    "Bash(git push --force *)",
+    "Bash(git commit --no-verify *)",
+    "Bash(terraform apply *)",
+    "Bash(terraform destroy *)",
+    "Read(**/.env)",
+    "Read(**/*.pem)",
+    "Read(~/.ssh/**)",
+    "Read(~/.aws/**)"
+  ],
+  "required_ask_rules": [
+    "WebFetch",
+    "Bash(git push *)",
+    "Edit(**/*.tf)",
+    "Edit(/.claude/**)"
+  ],
+  "forbidden_allow_rule_patterns": [
+    "^Bash$",
+    "^Bash\\(\\s*\\*",
+    "^Bash\\([^)]*\\*:\\*",
+    "^WebFetch",
+    "^WebSearch",
+    "^mcp__\\*",
+    "^Bash\\((?:curl|wget|nc|ncat|ssh|scp|sudo|su|env|printenv)\\b",
+    "^Bash\\(git push\\b",
+    "^Bash\\((?:terraform|tofu) (?:apply|destroy)\\b",
+    "^Bash\\(kubectl (?:delete|apply)\\b",
+    "^Read\\(//",
+    "^Read\\(~"
+  ],
+  "required_hooks": {
+    "UserPromptSubmit": {
+      "prompt_guard.py": []
+    },
+    "PreToolUse": {
+      "bash_guard.py": [
+        "Bash"
+      ],
+      "file_guard.py": [
+        "Write",
+        "Edit"
+      ],
+      "read_guard.py": [
+        "Read",
+        "Grep",
+        "Glob"
+      ]
+    }
+  },
+  "allowed_hook_scripts": [
+    "prompt_guard.py",
+    "bash_guard.py",
+    "file_guard.py",
+    "read_guard.py"
+  ],
+  "forbidden_settings_keys": [
+    "apiKeyHelper",
+    "awsAuthRefresh",
+    "awsCredentialExport",
+    "otelHeadersHelper",
+    "statusLine",
+    "disableAllHooks"
+  ],
+  "forbidden_env_patterns": [
+    "^ANTHROPIC_",
+    "_BASE_URL$",
+    "^CLAUDE_CODE_USE_",
+    "^(?:HTTPS?|ALL)_PROXY$",
+    "(?i)^https?_proxy$",
+    "^NODE_OPTIONS$",
+    "^NODE_TLS_REJECT_UNAUTHORIZED$",
+    "^CLAUDE_GUARDRAIL_AUDIT$"
+  ],
+  "allowed_sandbox_domains": [
+    "github.com",
+    "registry.npmjs.org",
+    "pypi.org",
+    "files.pythonhosted.org",
+    "proxy.golang.org",
+    "artifacts.internal.example.com"
+  ],
+  "forbidden_paths": [
+    ".claude/settings.local.json",
+    ".claude/audit/*",
+    ".claude/**/*.jsonl",
+    ".claude/projects/*",
+    ".claude/todos/*",
+    ".claude/shell-snapshots/*",
+    ".claude.json",
+    ".claude.json.backup*",
+    "CLAUDE.local.md",
+    ".mcp.local.json",
+    "*.mcp.local.json",
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*.jks",
+    "id_rsa*",
+    "id_ed25519*",
+    "id_ecdsa*",
+    "*.tfstate",
+    "*.tfstate.backup",
+    "credentials.json",
+    "client_secret*.json",
+    "service-account*.json",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    "anthropic_api_key*",
+    "*.anthropic-key",
+    ".envrc",
+    "kubeconfig*",
+    ".git-credentials",
+    ".pgpass",
+    "**/secrets/*",
+    "*.kdbx",
+    "*.ppk",
+    "*.keystore",
+    "service_account*.json",
+    "client_secrets.json",
+    "*.tfstate.*",
+    "id_dsa*"
+  ],
+  "allowed_paths": [
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+    ".env.dist",
+    ".env.defaults",
+    "*.pub"
+  ]
+}

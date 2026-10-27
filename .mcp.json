@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "internal-docs": {
+      "type": "http",
+      "url": "https://docs.mcp.internal.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${INTERNAL_MCP_TOKEN}"
+      }
+    },
+    "internal-tickets": {
+      "type": "http",
+      "url": "https://tickets.mcp.internal.example.com/mcp"
+    }
+  }
+}

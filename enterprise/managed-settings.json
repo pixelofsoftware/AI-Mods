@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel-collector.internal.example.com:4318",
+    "OTEL_LOG_USER_PROMPTS": "1",
+    "OTEL_LOG_TOOL_DETAILS": "1",
+    "OTEL_METRIC_EXPORT_INTERVAL": "60000",
+    "OTEL_LOGS_EXPORT_INTERVAL": "5000",
+    "OTEL_RESOURCE_ATTRIBUTES": "service.namespace=engineering,deployment.environment=workstation"
+  },
+  "otelHeadersHelper": "/usr/local/bin/claude-otel-headers",
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "deny": [
+      "WebSearch",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(nc *)",
+      "Bash(ncat *)",
+      "Bash(netcat *)",
+      "Bash(telnet *)",
+      "Bash(socat *)",
+      "Bash(sudo *)",
+      "Bash(printenv)",
+      "Bash(printenv *)",
+      "Bash(git push --force *)",
+      "Bash(git commit --no-verify *)",
+      "Bash(terraform apply *)",
+      "Bash(terraform destroy *)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.production)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.tfstate)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.azure/**)",
+      "Read(~/.config/gcloud/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.netrc)",
+      "Read(~/.git-credentials)"
+    ],
+    "ask": [
+      "WebFetch"
+    ]
+  },
+  "allowManagedMcpServersOnly": true,
+  "allowedMcpServers": [
+    { "serverUrl": "https://*.mcp.internal.example.com/*" }
+  ],
+  "deniedMcpServers": [
+    { "serverUrl": "http://*:*/*" }
+  ],
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowManagedDomainsOnly": true,
+      "allowedDomains": [
+        "github.com",
+        "registry.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "proxy.golang.org",
+        "artifacts.internal.example.com"
+      ]
+    }
+  },
+  "cleanupPeriodDays": 14
+}

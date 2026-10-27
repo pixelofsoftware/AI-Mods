@@ -1,0 +1,18 @@
+[project]
+name = "claude-guardrails"
+version = "1.0.0"
+description = "Enterprise guardrails for Claude Code and the Claude API: policy, hooks, pre-commit checks and an API safeguard wrapper."
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+# The safeguard wrapper needs the SDK only for real API calls; scanning is stdlib-only.
+api = ["anthropic>=2.3,<3"]
+dev = ["pytest>=8", "pyyaml>=6", "pre-commit>=4.7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.bandit]
+exclude_dirs = ["tests", ".sdlc"]
