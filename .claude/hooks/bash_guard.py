@@ -17,6 +17,7 @@ fails it answers "ask", never "allow" (fail closed).
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -25,7 +26,12 @@ from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import GUARDRAIL_PATH_RE, audit, fingerprint, looks_secret, pre_tool_decision, read_event  # noqa: E402
+try:
+    from guard_common import GUARDRAIL_PATH_RE, audit, fingerprint, looks_secret, pre_tool_decision, read_event
+except Exception as _exc:  # fail closed: a missing or broken shared module must not allow
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+        "permissionDecisionReason": f"[AI guardrail] bash_guard could not load its rules ({type(_exc).__name__}); manual review required"}}))
+    sys.exit(0)
 
 MAX_DEPTH = 3
 MAX_COMMAND_CHARS = 100_000
@@ -502,8 +508,10 @@ def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[
                 v.add("deny", "git_force_push", "force/mirror/delete pushes rewrite shared history")
             elif any(a.startswith("--force-with-lease") or a.startswith("--force-if-includes") for a in git_rest):
                 v.add("ask", "git_force_push", "force-with-lease push")
-        if git_sub in {"filter-branch", "filter-repo", "replace", "update-ref"}:
+        if git_sub in {"filter-branch", "filter-repo", "replace", "update-ref", "rebase"}:
             v.add("ask", "git_history_rewrite", f"`git {git_sub}` rewrites history")
+        if git_sub == "commit" and "--amend" in git_rest:
+            v.add("ask", "git_history_rewrite", "`git commit --amend` rewrites the last commit")
         if (git_sub == "reset" and "--hard" in git_rest) or (git_sub == "clean" and any(re.match(r"^-[a-zA-Z]*f", a) for a in git_rest)) or (git_sub == "branch" and "-D" in git_rest):
             v.add("ask", "git_destructive", f"`git {git_sub}` discards work")
         if git_sub == "config" and re.search(r"core\.fsmonitor|core\.sshCommand|credential\.helper|--global|--system|url\..*\.insteadOf", " ".join(git_rest)):

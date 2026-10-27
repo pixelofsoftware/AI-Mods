@@ -11,26 +11,32 @@ Catches problems at the moment Claude writes them, before pre-commit:
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import (  # noqa: E402
-    CREDENTIAL_CATEGORIES,
-    GUARDRAIL_PATH_RE,
-    IAC_PATH_RE,
-    MAX_SCAN_CHARS,
-    PROJECT_DIR,
-    SECRET_PATH_RE,
-    SECURITY_CRITICAL_PATH_RE,
-    Redactor,
-    Severity,
-    audit,
-    pre_tool_decision,
-    read_event,
-)
+try:
+    from guard_common import (
+        CREDENTIAL_CATEGORIES,
+        GUARDRAIL_PATH_RE,
+        IAC_PATH_RE,
+        MAX_SCAN_CHARS,
+        PROJECT_DIR,
+        SECRET_PATH_RE,
+        SECURITY_CRITICAL_PATH_RE,
+        Redactor,
+        Severity,
+        audit,
+        pre_tool_decision,
+        read_event,
+    )
+except Exception as _exc:  # fail closed: a missing or broken shared module must not allow
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+        "permissionDecisionReason": f"[AI guardrail] file_guard could not load its rules ({type(_exc).__name__}); manual review required"}}))
+    sys.exit(0)
 
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 

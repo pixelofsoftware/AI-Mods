@@ -50,7 +50,7 @@ __all__ = [
 AUDIT_DIR = Path(os.environ.get("CLAUDE_GUARDRAIL_AUDIT_DIR") or PROJECT_DIR / ".claude" / "audit")
 
 # Template suffixes that are safe to read and commit (keep in sync with the policy
-# allowed_paths and .gitignore; tests/test_drift.py enforces it).
+# allowed_paths and .gitignore; tests/test_review2_regressions.py enforces it).
 ENV_TEMPLATE_SUFFIXES = ("example", "sample", "template", "dist", "defaults")
 
 # Files that hold secrets. `.env.example` style templates stay usable.

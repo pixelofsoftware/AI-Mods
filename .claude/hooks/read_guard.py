@@ -10,11 +10,17 @@ pattern the Bash and file guards use, so every variant is denied in one place.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import audit, looks_secret, pre_tool_decision, read_event  # noqa: E402
+try:
+    from guard_common import audit, looks_secret, pre_tool_decision, read_event
+except Exception as _exc:  # fail closed: a missing or broken shared module must not allow
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+        "permissionDecisionReason": f"[AI guardrail] read_guard could not load its rules ({type(_exc).__name__}); manual review required"}}))
+    sys.exit(0)
 
 READ_TOOLS = {"Read", "Grep", "Glob", "NotebookRead"}
 

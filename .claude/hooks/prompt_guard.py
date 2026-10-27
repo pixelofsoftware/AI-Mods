@@ -19,7 +19,11 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import CREDENTIAL_CATEGORIES, MAX_SCAN_CHARS, Redactor, Severity, audit, detect_prompt_injection, fingerprint, read_event  # noqa: E402
+try:
+    from guard_common import CREDENTIAL_CATEGORIES, MAX_SCAN_CHARS, Redactor, Severity, audit, detect_prompt_injection, fingerprint, read_event
+except Exception as _exc:  # never lose the prompt to a broken install, but say so loudly
+    print(json.dumps({"systemMessage": f"[AI guardrail] prompt_guard could not load its rules ({type(_exc).__name__}); prompts are NOT being checked. Run scripts/setup_guardrails.sh --check."}))
+    sys.exit(0)
 
 ACK_RE = re.compile(r"\[sensitive-ok:\s*([^\]]{5,200})\]", re.I)
 MAX_PREVIEW = 4000

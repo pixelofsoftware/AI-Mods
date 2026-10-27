@@ -339,7 +339,9 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "phone",
         "PHONE",
         Severity.MEDIUM,
-        _r(r"(?<![\w+.])(?:\+\d{1,3}[ .\-]?)?(?:\(\d{2,4}\)|\d{2,4})[ .\-]\d{3,4}[ .\-]\d{3,4}(?![\w]|\.\d)"),
+        # Not preceded or followed by another digit group, so `4242 4242 4242 4242`
+        # (a card-shaped run) is never read as a phone number.
+        _r(r"(?<![\w+.])(?<!\d[ .\-])(?:\+\d{1,3}[ .\-]?)?(?:\(\d{2,4}\)|\d{2,4})[ .\-]\d{3,4}[ .\-]\d{3,4}(?![\w]|[ .\-]?\d)"),
         validator=lambda v: 9 <= len(_digits(v)) <= 15 and not re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){2,3}", v.strip()),
     ),
 )
