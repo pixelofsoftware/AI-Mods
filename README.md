@@ -7,6 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/pixelofsoftware/AI-Mods/actions/workflows/ai-guardrails.yml"><img alt="CI" src="https://github.com/pixelofsoftware/AI-Mods/actions/workflows/ai-guardrails.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-16A34A"></a>
   <img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white">
   <img alt="Dependencies: stdlib only for hooks" src="https://img.shields.io/badge/hooks-stdlib%20only-0D9488">
   <a href="https://pre-commit.com"><img alt="pre-commit" src="https://img.shields.io/badge/pre--commit-enabled-FAB040?logo=pre-commit&logoColor=white"></a>
@@ -547,7 +548,7 @@ Found a way past a guardrail? Please **don't** open a public issue. Report it pr
 
 ## 📄 License
 
-A license has not been chosen yet. Until one is added, all rights are reserved by the author.
+Released under the [MIT License](LICENSE). Use it, fork it and adapt it for your organisation.
 
 ---
 
