@@ -210,16 +210,21 @@ def _r(pattern: str, flags: int = 0) -> Pattern[str]:
 
 
 # Order matters: earlier (more specific) rules win when spans overlap at equal severity.
+# Every quantifier is bounded and every rule is left-anchored (\b or a lookbehind) so
+# matching stays linear on long attacker-controlled input (minified JS, base64, logs).
 DEFAULT_RULES: Tuple[Rule, ...] = (
     # --- Credentials (CRITICAL): never acceptable in a prompt ---------------
     Rule(
         "private_key_block",
         "PRIVATE_KEY",
         Severity.CRITICAL,
-        _r(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----|\Z)"),
+        _r(
+            r"-----BEGIN (?:[A-Z0-9]{1,20} ){0,4}PRIVATE KEY(?: BLOCK)?-----"
+            r"(?:[\s\S]{0,16384}?-----END (?:[A-Z0-9]{1,20} ){0,4}PRIVATE KEY(?: BLOCK)?-----)?"
+        ),
     ),
-    Rule("anthropic_api_key", "API_KEY", Severity.CRITICAL, _r(r"\bsk-ant-[A-Za-z0-9_\-]{20,}")),
-    Rule("openai_api_key", "API_KEY", Severity.CRITICAL, _r(r"\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_\-]{32,}")),
+    Rule("anthropic_api_key", "API_KEY", Severity.CRITICAL, _r(r"\bsk-ant-[A-Za-z0-9_\-]{20,512}")),
+    Rule("openai_api_key", "API_KEY", Severity.CRITICAL, _r(r"\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_\-]{32,512}")),
     Rule(
         "aws_access_key_id",
         "CLOUD_CREDENTIAL",
@@ -231,7 +236,7 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "aws_secret_access_key",
         "CLOUD_CREDENTIAL",
         Severity.CRITICAL,
-        _r(r"(?i)aws.{0,24}?(?:secret|private).{0,24}?['\"]?\s*[:=]\s*['\"]?([A-Za-z0-9/+=]{40})(?![A-Za-z0-9/+=])"),
+        _r(r"(?i)\baws.{0,24}?(?:secret|private).{0,24}?['\"]?\s{0,5}[:=]\s{0,5}['\"]?([A-Za-z0-9/+=]{40})(?![A-Za-z0-9/+=])"),
         group=1,
         validator=_not_placeholder,
     ),
@@ -240,29 +245,29 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "azure_storage_key",
         "CLOUD_CREDENTIAL",
         Severity.CRITICAL,
-        _r(r"(?i)AccountKey=([A-Za-z0-9+/=]{60,})"),
+        _r(r"(?i)\bAccountKey=([A-Za-z0-9+/=]{60,512})"),
         group=1,
     ),
     Rule(
         "github_token",
         "API_KEY",
         Severity.CRITICAL,
-        _r(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b"),
+        _r(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b"),
     ),
-    Rule("gitlab_token", "API_KEY", Severity.CRITICAL, _r(r"\bglpat-[A-Za-z0-9_\-]{20,}\b")),
-    Rule("slack_token", "API_KEY", Severity.CRITICAL, _r(r"\bxox[abposr]-[A-Za-z0-9\-]{10,}\b")),
+    Rule("gitlab_token", "API_KEY", Severity.CRITICAL, _r(r"\bglpat-[A-Za-z0-9_\-]{20,255}")),
+    Rule("slack_token", "API_KEY", Severity.CRITICAL, _r(r"\bxox[abposr]-[A-Za-z0-9\-]{10,255}")),
     Rule(
         "slack_webhook",
         "API_KEY",
         Severity.CRITICAL,
-        _r(r"https://hooks\.slack\.com/services/[A-Za-z0-9_/]{20,}"),
+        _r(r"https://hooks\.slack\.com/services/[A-Za-z0-9_/]{20,255}"),
     ),
-    Rule("stripe_live_key", "API_KEY", Severity.CRITICAL, _r(r"\b(?:sk|rk)_live_[0-9A-Za-z]{16,}\b")),
+    Rule("stripe_live_key", "API_KEY", Severity.CRITICAL, _r(r"\b(?:sk|rk)_live_[0-9A-Za-z]{16,255}")),
     Rule(
         "bearer_token",
         "AUTH_TOKEN",
         Severity.CRITICAL,
-        _r(r"(?i)\bbearer\s+([A-Za-z0-9\-._~+/]{20,}=*)"),
+        _r(r"(?i)\bbearer\s{1,5}([A-Za-z0-9\-._~+/]{20,4096}={0,2})"),
         group=1,
         validator=_not_placeholder,
     ),
@@ -270,16 +275,16 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "url_embedded_password",
         "PASSWORD",
         Severity.CRITICAL,
-        _r(r"\b[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s:/@'\"]+:([^\s@/'\"]{3,})@"),
+        _r(r"(?<![A-Za-z0-9+.\-])[a-zA-Z][a-zA-Z0-9+.\-]{0,30}://[^\s:/@'\"]{1,256}:([^\s@/'\"]{3,256})@"),
         group=1,
         validator=_not_placeholder,
     ),
-    # --- Likely credentials (HIGH): keyword-anchored, more false positives ----
+    # --- Likely credentials (HIGH severity, still CREDENTIAL category) --------
     Rule(
         "jwt",
         "AUTH_TOKEN",
         Severity.HIGH,
-        _r(r"\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"),
+        _r(r"(?<![A-Za-z0-9_\-])eyJ[A-Za-z0-9_\-]{8,4096}\.eyJ[A-Za-z0-9_\-]{8,4096}\.[A-Za-z0-9_\-]{8,4096}"),
     ),
     Rule(
         "secret_assignment",
@@ -287,7 +292,7 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         Severity.HIGH,
         _r(
             r"(?i)\b(?:password|passwd|pwd|secret|client[_\-]?secret|api[_\-]?key|access[_\-]?token|auth[_\-]?token|private[_\-]?key)\b"
-            r"['\"]?\s*[:=]\s*['\"]?([^\s'\",;]{8,})"
+            r"['\"]?\s{0,5}[:=]\s{0,5}['\"]?([^\s'\",;]{8,512})"
         ),
         group=1,
         validator=_not_placeholder,
@@ -317,7 +322,7 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "medical_record_number",
         "PHI",
         Severity.HIGH,
-        _r(r"(?i)\b(?:MRN|medical record(?: number| no\.?)?|patient id)\s*[:#]?\s*([A-Z0-9\-]{6,12})\b"),
+        _r(r"(?i)\b(?:MRN|medical record(?: number| no\.?)?|patient id)\s{0,3}[:#]?\s{0,3}([A-Z0-9\-]{6,12})\b"),
         group=1,
     ),
     # --- Contact data (MEDIUM): redacted, not blocked -----------------------
@@ -325,7 +330,7 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "email",
         "EMAIL",
         Severity.MEDIUM,
-        _r(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}\b"),
+        _r(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]{1,63}(?:\.[A-Za-z0-9\-]{1,63}){0,8}\.[A-Za-z]{2,24}\b"),
     ),
     Rule(
         "phone",
@@ -481,20 +486,32 @@ class Verdict(str, enum.Enum):
     BLOCK = "BLOCK"
 
 
+def _rm_targets_root(m: "re.Match[str]") -> bool:
+    flags = m.group("flags").split()
+    short = "".join(f[1:] for f in flags if f.startswith("-") and not f.startswith("--"))
+    recursive = "r" in short.lower() or "--recursive" in flags
+    force = "f" in short or "--force" in flags or "--no-preserve-root" in flags
+    return recursive and force
+
+
 @dataclass(frozen=True)
 class OutputRule:
     name: str
     verdict: Verdict
     pattern: Pattern[str]
     description: str
+    check: Optional[Callable[["re.Match[str]"], bool]] = None
 
 
+# Gaps between keywords are bounded ({0,300}) so one huge line cannot cause
+# quadratic matching.
 DEFAULT_OUTPUT_RULES: Tuple[OutputRule, ...] = (
     OutputRule(
         "reverse_shell",
         Verdict.BLOCK,
         _r(
-            r"/dev/(?:tcp|udp)/[^\s/]+/\d+|\b(?:nc|ncat|netcat)\b[^\n]*\s-(?:e|c)\s|\bbash\s+-i\s+>&|\bsocat\b[^\n]*\bexec:|\bmkfifo\b[^\n]*\b(?:nc|ncat)\b"
+            r"/dev/(?:tcp|udp)/[^\s/]{1,255}/\d{1,5}|\b(?:nc|ncat|netcat)\b[^\n]{0,300}?\s-(?:e|c)\s|\bbash\s{1,5}-i\s{1,5}>&"
+            r"|\bsocat\b[^\n]{0,300}?\bexec:|\bmkfifo\b[^\n]{0,300}?\b(?:nc|ncat|netcat)\b"
         ),
         "reverse/bind shell construct",
     ),
@@ -502,27 +519,33 @@ DEFAULT_OUTPUT_RULES: Tuple[OutputRule, ...] = (
         "encoded_exec",
         Verdict.BLOCK,
         _r(
-            r"(?i)base64\s+(?:-d|-D|--decode)\b[^\n]*\|\s*(?:sudo\s+)?(?:ba|z|k|da)?sh\b"
-            r"|powershell(?:\.exe)?\b[^\n]*\s-(?:e|ec|enc|encodedcommand)\s+[A-Za-z0-9+/=]{16,}"
-            r"|\bIEX\s*\(|\bInvoke-Expression\b[^\n]*(?:DownloadString|Invoke-WebRequest|iwr)"
+            r"(?i)\bbase64\s{1,5}(?:-d|-D|--decode)\b[^\n]{0,300}?\|\s{0,5}(?:sudo\s{1,5})?(?:ba|z|k|da)?sh\b"
+            r"|\bpowershell(?:\.exe)?\b[^\n]{0,300}?\s-(?:e|ec|enc|encodedcommand)\s{1,5}[A-Za-z0-9+/=]{16,}"
+            r"|\bIEX\s{0,5}\(|\bInvoke-Expression\b[^\n]{0,300}?(?:DownloadString|Invoke-WebRequest|iwr)"
         ),
         "obfuscated or encoded command execution",
     ),
     OutputRule(
         "destructive_command",
         Verdict.BLOCK,
+        _r(r"\brm\s{1,5}(?P<flags>(?:-{1,2}[A-Za-z][A-Za-z\-]{0,30}\s{1,5}){1,8})(?:/\*?|~/?|\$HOME/?|\$\{HOME\}/?)(?=[\s;&|)`'\"]|$)"),
+        "recursive force-delete of / or $HOME",
+        check=_rm_targets_root,
+    ),
+    OutputRule(
+        "disk_wipe",
+        Verdict.BLOCK,
         _r(
-            r"\brm\s+(?:-[a-zA-Z]*[rR][a-zA-Z]*\s+|--recursive\s+|--force\s+|-[a-zA-Z]*f[a-zA-Z]*\s+)+(?:--no-preserve-root\s+)?(?:/|/\*|~/?|\$HOME/?|\$\{HOME\}/?)(?=[\s;&|)`'\"]|$)"
-            r"|\bmkfs(?:\.\w+)?\s+/dev/|\bdd\b[^\n]*\bof=/dev/(?:sd|hd|nvme|disk|xvd)"
-            r"|:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:|\bformat\s+[a-zA-Z]:\s*/[qQyY]"
+            r"\bmkfs(?:\.\w{1,10})?\s{1,5}/dev/|\bdd\b[^\n]{0,300}?\bof=/dev/(?:sd|hd|nvme|disk|xvd)"
+            r"|:\(\)\s{0,3}\{\s{0,3}:\s{0,3}\|\s{0,3}:\s{0,3}&\s{0,3}\}\s{0,3};\s{0,3}:|\bformat\s{1,5}[a-zA-Z]:\s{0,3}/[qQyY]"
         ),
-        "destructive filesystem/disk command",
+        "disk wipe or fork bomb",
     ),
     OutputRule(
         "credential_exfiltration",
         Verdict.BLOCK,
         _r(
-            r"(?i)\b(?:curl|wget|Invoke-WebRequest|iwr|nc)\b[^\n]*(?:\.aws/credentials|\.ssh/id_|/etc/shadow|\.kube/config|\.netrc"
+            r"(?i)\b(?:curl|wget|Invoke-WebRequest|iwr|nc)\b[^\n]{0,300}?(?:\.aws/credentials|\.ssh/id_|/etc/shadow|\.kube/config|\.netrc"
             r"|\$\{?(?:AWS_SECRET_ACCESS_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|OPENAI_API_KEY)\b)"
         ),
         "command that ships credentials off-host",
@@ -530,7 +553,7 @@ DEFAULT_OUTPUT_RULES: Tuple[OutputRule, ...] = (
     OutputRule(
         "markdown_image_exfiltration",
         Verdict.BLOCK,
-        _r(r"!\[[^\]]*\]\(\s*<?https?://[^)\s>]+\?[^)\s>]*=[^)\s>]+>?\s*\)"),
+        _r(r"!\[[^\]\n]{0,300}\]\(\s{0,5}<?https?://[^)\s>]{1,2048}\?[^)\s>]{0,2048}=[^)\s>]{1,2048}>?\s{0,5}\)"),
         "auto-loading image URL with query parameters (data exfiltration channel)",
     ),
     OutputRule(
@@ -542,19 +565,22 @@ DEFAULT_OUTPUT_RULES: Tuple[OutputRule, ...] = (
     OutputRule(
         "pipe_to_shell",
         Verdict.WARN,
-        _r(r"(?i)\b(?:curl|wget|iwr|Invoke-WebRequest)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba|z|k|da)?sh\b"),
+        _r(r"(?i)\b(?:curl|wget|iwr|Invoke-WebRequest)\b[^\n|]{0,300}\|\s{0,5}(?:sudo\s{1,5})?(?:ba|z|k|da)?sh\b"),
         "remote script piped into a shell",
     ),
     OutputRule(
         "insecure_permissions",
         Verdict.WARN,
-        _r(r"\bchmod\s+(?:-R\s+)?0?777\b"),
+        _r(r"\bchmod\s{1,5}(?:-R\s{1,5})?0?777\b"),
         "world-writable permissions",
     ),
     OutputRule(
         "security_control_bypass",
         Verdict.WARN,
-        _r(r"\bsetenforce\s+0\b|\bufw\s+disable\b|\bgit\s+(?:commit|push)\b[^\n]*\s--no-verify\b|\bgit\s+push\b[^\n]*\s(?:-f|--force)\b|--insecure\b|\bverify\s*=\s*False\b"),
+        _r(
+            r"\bsetenforce\s{1,5}0\b|\bufw\s{1,5}disable\b|\bgit\s{1,5}(?:commit|push)\b[^\n]{0,300}?\s--no-verify\b"
+            r"|\bgit\s{1,5}push\b[^\n]{0,300}?\s(?:-f|--force)\b|--insecure\b|\bverify\s{0,3}=\s{0,3}False\b"
+        ),
         "disables a security control",
     ),
     OutputRule(
@@ -609,12 +635,12 @@ class OutputValidator:
 
         def bump(v: Verdict) -> None:
             nonlocal verdict
-            order = [Verdict.PASS, Verdict.WARN, Verdict.BLOCK]
-            if order.index(v) > order.index(verdict):
-                verdict = v
+            verdict = _worst(verdict, v)
 
         for rule in self.rules:
             for m in rule.pattern.finditer(text or ""):
+                if rule.check is not None and not rule.check(m):
+                    continue
                 if rule.name == "markdown_image_exfiltration" and self._trusted_image(m.group(0)):
                     continue
                 findings.append({"rule": rule.name, "verdict": rule.verdict.value, "description": rule.description})
@@ -645,6 +671,13 @@ class OutputValidator:
         return report
 
 
+_VERDICT_ORDER = (Verdict.PASS, Verdict.WARN, Verdict.BLOCK)
+
+
+def _worst(a: Verdict, b: Verdict) -> Verdict:
+    return a if _VERDICT_ORDER.index(a) >= _VERDICT_ORDER.index(b) else b
+
+
 def _remove_spans(text: str, spans: List[Tuple[int, int, str]]) -> str:
     out, cursor = [], 0
     for start, end, label in sorted(spans):
@@ -672,8 +705,9 @@ def _env_bool(name: str, default: bool) -> bool:
 @dataclass
 class Policy:
     model: str = DEFAULT_MODEL
-    # Requests whose highest finding is in this set are refused locally.
-    block_on: frozenset = frozenset({Severity.CRITICAL})
+    # Requests whose highest finding is at or above this severity are refused
+    # locally (None = never refuse, only redact).
+    block_min_severity: Optional[Severity] = Severity.CRITICAL
     # Severities at or above this are masked before sending.
     redact_min_severity: Severity = Severity.MEDIUM
     # "raise" -> UnsafeOutputError on BLOCK; "sanitize" -> strip blocked spans; "warn" -> log only.
@@ -686,19 +720,21 @@ class Policy:
     trusted_image_hosts: Tuple[str, ...] = ()
     app_name: str = "claude-app"
 
+    def blocks(self, severity: Severity) -> bool:
+        return self.block_min_severity is not None and severity >= self.block_min_severity
+
     @classmethod
     def from_env(cls) -> "Policy":
         block_raw = os.environ.get("CLAUDE_SAFEGUARD_BLOCK_ON", "critical")
-        block_on = frozenset() if block_raw.strip().lower() in {"", "none"} else frozenset(
-            Severity.parse(s) for s in block_raw.split(",") if s.strip()
-        )
+        levels = [Severity.parse(s) for s in block_raw.split(",") if s.strip() and s.strip().lower() != "none"]
+        block_min = min(levels) if levels else None
         hosts = tuple(h.strip() for h in os.environ.get("CLAUDE_SAFEGUARD_TRUSTED_IMAGE_HOSTS", "").split(",") if h.strip())
         action = os.environ.get("CLAUDE_SAFEGUARD_OUTPUT_ACTION", "raise").strip().lower()
         if action not in {"raise", "sanitize", "warn"}:
             raise ValueError(f"CLAUDE_SAFEGUARD_OUTPUT_ACTION must be raise|sanitize|warn, got {action!r}")
         return cls(
             model=os.environ.get("CLAUDE_SAFEGUARD_MODEL", DEFAULT_MODEL),
-            block_on=block_on,
+            block_min_severity=block_min,
             redact_min_severity=Severity.parse(os.environ.get("CLAUDE_SAFEGUARD_REDACT_MIN", "medium")),
             output_action=action,
             enable_fallbacks=_env_bool("CLAUDE_SAFEGUARD_FALLBACKS", True),
@@ -803,44 +839,56 @@ class SafeClaude:
 
     # Request preparation --------------------------------------------------- #
 
-    def _redact_content(self, content: Any, redactor: Redactor, stats: Dict[str, Any]) -> Any:
-        if isinstance(content, str):
-            res = redactor.redact(content)
+    # Keys holding identifiers or protocol values, never user content.
+    _STRUCTURAL_KEYS = frozenset(
+        {"type", "id", "tool_use_id", "name", "media_type", "cache_control", "role", "signature", "file_id", "citations"}
+    )
+    # Blocks the API requires back byte-for-byte; they are model output, not user input.
+    _OPAQUE_BLOCKS = frozenset({"thinking", "redacted_thinking"})
+    # Binary sources that regex cannot inspect.
+    _BINARY_SOURCES = frozenset({"base64", "file", "url"})
+
+    def _redact_value(self, value: Any, redactor: Redactor, stats: Dict[str, Any]) -> Any:
+        """Redact every user-content string in a message, system prompt or block, recursively.
+
+        Covers text, tool_result (string or nested blocks, incl. search_result),
+        document text/content sources, titles and context, tool_use inputs, and SDK
+        objects passed back from previous responses.
+        """
+        if hasattr(value, "model_dump") and not isinstance(value, (str, bytes, dict, list)):
+            value = value.model_dump(exclude_none=True)
+        if isinstance(value, str):
+            res = redactor.redact(value)
             stats["findings"].extend(res.findings)
             stats["invisible"] += res.invisible_chars_removed
-            stats["injection"].update(detect_prompt_injection(content))
+            stats["injection"].update(detect_prompt_injection(value))
             stats["redacted_parts"].append(res.text)
             return res.text
-        if isinstance(content, list):
-            return [self._redact_block(b, redactor, stats) for b in content]
-        return content
-
-    def _redact_block(self, block: Any, redactor: Redactor, stats: Dict[str, Any]) -> Any:
-        if not isinstance(block, dict):
-            stats["unscannable"] += 1
-            return block
-        block = dict(block)
-        btype = block.get("type")
-        if btype == "text":
-            block["text"] = self._redact_content(block.get("text", ""), redactor, stats)
-        elif btype == "tool_result":
-            block["content"] = self._redact_content(block.get("content", ""), redactor, stats)
-        elif btype == "document" and isinstance(block.get("source"), dict) and block["source"].get("type") == "text":
-            source = dict(block["source"])
-            source["data"] = self._redact_content(source.get("data", ""), redactor, stats)
-            block["source"] = source
-        elif btype in {"image", "document"}:
-            stats["unscannable"] += 1
-        return block
+        if isinstance(value, list):
+            return [self._redact_value(v, redactor, stats) for v in value]
+        if isinstance(value, dict):
+            if value.get("type") in self._OPAQUE_BLOCKS:
+                return value
+            out: Dict[str, Any] = {}
+            for key, item in value.items():
+                if key in self._STRUCTURAL_KEYS:
+                    out[key] = item
+                elif key == "source" and isinstance(item, dict) and item.get("type") in self._BINARY_SOURCES:
+                    stats["unscannable"] += 1
+                    out[key] = item
+                else:
+                    out[key] = self._redact_value(item, redactor, stats)
+            return out
+        return value
 
     def _prepare(self, system: Any, messages: List[Dict[str, Any]], redactor: Redactor) -> Tuple[Any, List[Dict[str, Any]], Dict[str, Any]]:
         stats: Dict[str, Any] = {"findings": [], "invisible": 0, "injection": set(), "unscannable": 0, "redacted_parts": []}
         safe_messages = []
         for msg in copy.deepcopy(messages):
             # Operator-authored assistant turns are still redacted: they may quote user data.
-            msg["content"] = self._redact_content(msg.get("content", ""), redactor, stats)
+            msg["content"] = self._redact_value(msg.get("content", ""), redactor, stats)
             safe_messages.append(msg)
-        safe_system = self._redact_content(system, redactor, stats) if system is not None else None
+        safe_system = self._redact_value(system, redactor, stats) if system is not None else None
         return safe_system, safe_messages, stats
 
     def _decorate_system(self, system: Any, canary: Optional[str]) -> Any:
@@ -910,7 +958,7 @@ class SafeClaude:
         }
 
         block_reason = None
-        if max_sev in self.policy.block_on:
+        if findings and self.policy.blocks(max_sev):
             block_reason = f"input contains {max_sev.name} data: {sorted(counts)}"
         elif self.policy.block_unscannable and stats["unscannable"]:
             block_reason = "input contains images/PDFs that cannot be scanned for sensitive data"
@@ -967,13 +1015,24 @@ class SafeClaude:
             event["claude"]["refusal_category"] = getattr(details, "category", None)
 
         report = self.validator.validate(text, canary=canary)
+        tool_input_blocked = False
+        for block in response.content:
+            if getattr(block, "type", None) not in {"tool_use", "server_tool_use"}:
+                continue
+            payload = json.dumps(getattr(block, "input", None), default=str, ensure_ascii=False)
+            tool_report = self.validator.validate(payload, canary=canary)
+            for finding in tool_report.findings:
+                report.findings.append({**finding, "rule": f"tool_input:{finding['rule']}"})
+            report.verdict = _worst(report.verdict, tool_report.verdict)
+            tool_input_blocked = tool_input_blocked or tool_report.verdict is Verdict.BLOCK
         event["output"] = {"verdict": report.verdict.value, "findings": report.counts(), "action": self.policy.output_action}
         event["event"]["outcome"] = "success"
         event["duration_ms"] = round((time.monotonic() - started) * 1000, 1)
         self.audit.emit(event)
 
         if report.verdict is Verdict.BLOCK:
-            if self.policy.output_action == "raise":
+            # Tool inputs cannot be sanitised in place, so they always raise unless policy is "warn".
+            if self.policy.output_action == "raise" or (tool_input_blocked and self.policy.output_action != "warn"):
                 raise UnsafeOutputError(f"Response blocked by output validation: {sorted(report.counts())}", report, request_id)
             if self.policy.output_action == "sanitize" and report.sanitized_text is not None:
                 text = report.sanitized_text
@@ -1014,7 +1073,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     redactor = Redactor(min_severity=policy.redact_min_severity)
     res = redactor.redact(text)
     max_sev = res.max_severity or Severity.LOW
-    blocked = max_sev in policy.block_on
+    blocked = bool(res.findings) and policy.blocks(max_sev)
     print(
         json.dumps(
             {

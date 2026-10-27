@@ -19,7 +19,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import Redactor, Severity, audit, detect_prompt_injection, fingerprint, read_event  # noqa: E402
+from guard_common import CREDENTIAL_CATEGORIES, MAX_SCAN_CHARS, Redactor, Severity, audit, detect_prompt_injection, fingerprint, read_event  # noqa: E402
 
 ACK_RE = re.compile(r"\[sensitive-ok:\s*([^\]]{5,200})\]", re.I)
 MAX_PREVIEW = 4000
@@ -36,9 +36,13 @@ def main() -> None:
     if not prompt.strip():
         return
 
+    if len(prompt) > MAX_SCAN_CHARS:
+        # Scan the head and tail; a giant paste is itself a data-handling smell.
+        prompt = prompt[: MAX_SCAN_CHARS // 2] + "\n" + prompt[-MAX_SCAN_CHARS // 2 :]
     result = Redactor(min_severity=Severity.HIGH).redact(prompt)
     findings = result.findings
-    critical = [f for f in findings if f.severity >= Severity.CRITICAL]
+    # Credentials are never overridable, whatever their detection confidence.
+    critical = [f for f in findings if f.severity >= Severity.CRITICAL or f.category in CREDENTIAL_CATEGORIES]
     high = [f for f in findings if f.severity == Severity.HIGH and f not in critical]
     medium = [f for f in findings if f.severity == Severity.MEDIUM]
     ack = ACK_RE.search(prompt)
@@ -65,7 +69,7 @@ def main() -> None:
     rules = [f.rule for f in high + medium]
     notes = []
     if high and ack:
-        audit("prompt_guard", event, "allow_with_ack", rules, {"prompt_fp": fingerprint(prompt), "ack_reason": ack.group(1)[:200]})
+        audit("prompt_guard", event, "allow_with_ack", rules, {"prompt_fp": fingerprint(prompt), "ack_reason": Redactor().redact(ack.group(1)[:200]).text})
         notes.append(f"Sensitive-data acknowledgement recorded ({categories(high)}).")
     if medium:
         notes.append(f"Prompt contains {categories(medium)}; avoid customer personal data in prompts (policy §2).")

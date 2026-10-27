@@ -21,6 +21,7 @@ from guard_common import (  # noqa: E402
     CREDENTIAL_CATEGORIES,
     GUARDRAIL_PATH_RE,
     IAC_PATH_RE,
+    MAX_SCAN_CHARS,
     PROJECT_DIR,
     SECRET_PATH_RE,
     SECURITY_CRITICAL_PATH_RE,
@@ -69,6 +70,9 @@ def main() -> None:
         )
 
     content = new_content(tool_input)
+    if len(content) > MAX_SCAN_CHARS:
+        audit("file_guard", event, "ask", ["oversized_content"], {"path": rel})
+        pre_tool_decision("ask", f"`{rel}`: content too large to scan for secrets ({len(content)} chars); review before approving")
     findings = Redactor().scan(content)
     creds = [f for f in findings if f.category in CREDENTIAL_CATEGORIES and f.severity >= Severity.CRITICAL]
     if creds:

@@ -20,6 +20,7 @@ pre-commit run --all-files       # everything CI runs
 | `.claude/settings.json` | Project Claude Code config: least-privilege allow/ask/deny rules, sandbox, hooks, approved MCP servers |
 | `.claude/hooks/prompt_guard.py` | `UserPromptSubmit`: blocks credentials and regulated PII before they reach Claude; offers a redacted copy |
 | `.claude/hooks/bash_guard.py` | `PreToolUse(Bash)`: parses real commands to block network egress, secret access, force-push, `--no-verify`, `terraform apply`, … |
+| `.claude/hooks/read_guard.py` | `PreToolUse(Read/Grep/Glob)`: blocks reading any secrets-file variant (`.env.*`, `.envrc`, keys, kubeconfig) |
 | `.claude/hooks/file_guard.py` | `PreToolUse(Write/Edit)`: blocks hardcoded secrets; requires approval for IaC, security-critical and guardrail files |
 | `.mcp.json` | Internally hosted MCP servers (HTTPS, `${VAR}` credentials) |
 | `enterprise/managed-settings.json` | Org-wide policy: OpenTelemetry + prompt logging, bypass lock, MCP URL allowlist, sandbox network lock |

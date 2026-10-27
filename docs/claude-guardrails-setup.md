@@ -80,7 +80,7 @@ claude
 |---|---|
 | `/status` | `Setting sources` lists *Project settings* (and *Managed settings* if your admin deployed Part B) |
 | `/permissions` | The allow / ask / deny lists from `.claude/settings.json` |
-| `/hooks` | `UserPromptSubmit → prompt_guard.py`, `PreToolUse → bash_guard.py, file_guard.py` |
+| `/hooks` | `UserPromptSubmit → prompt_guard.py`; `PreToolUse → bash_guard.py` (Bash), `file_guard.py` (Write/Edit), `read_guard.py` (Read/Grep/Glob) |
 | `/sandbox` | Sandbox enabled, regular-permissions mode, unsandboxed fallback off |
 | `/mcp` | `internal-docs` and `internal-tickets` (connected once A3 is done) |
 
@@ -99,6 +99,7 @@ claude
 - **Pick the mode for the risk tier** (`Shift+Tab` cycles modes): Plan → Manual for Tier 2, accept-edits for routine Tier 1, auto only for Tier 0 tasks with tests. Bypass mode is disabled.
 - **Blocked prompt with synthetic data?** Add `[sensitive-ok: synthetic fixture for parser tests]` to the prompt. This works for SSNs, cards and similar personal data. Credentials can never be overridden; use obvious fakes or placeholders such as `<API_KEY>`.
 - **Check text before pasting it:** `python3 scripts/claude_safeguard.py scan "text"` (or pipe a file into `... scan -`) shows what would be redacted, without any network call.
+- **Test runners run code Claude wrote.** `pytest`, `npm run test` and similar are allowlisted for speed, so the OS sandbox (filesystem and network isolation) is what contains them. Keep `bwrap`/`socat` installed.
 - **Personal preferences** go in `.claude/settings.local.json` (gitignored and blocked by pre-commit). You can add `allow` rules for commands you trust, but you cannot override a `deny` from the project or organisation.
 - **Your audit trail:** `.claude/audit/guardrail-events.jsonl` records each block, approval prompt and override (rule names only, no content).
 - **Committing:** pre-commit runs automatically. If it blocks a file, read the message, fix the cause, and commit again. `--no-verify` is blocked for Claude and doesn't help you either, because CI runs the same checks.
@@ -163,7 +164,7 @@ The managed `env` block turns on Claude Code's OpenTelemetry export:
 | `OTEL_METRICS_EXPORTER` / `OTEL_LOGS_EXPORTER` | `otlp` | Metrics (cost, tokens, sessions, LOC) and events |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` / `_ENDPOINT` | `http/protobuf`, `https://…:4318` | Your collector |
 | `OTEL_LOG_USER_PROMPTS` | `1` | **Prompt logging**: includes prompt text in `claude_code.user_prompt` events |
-| `OTEL_LOG_TOOL_DETAILS` | `1` | Bash commands, MCP server and tool names in tool events |
+| `OTEL_LOG_TOOL_DETAILS` | `1` | Full Bash commands, MCP server and tool names in tool events (commands can contain inline secrets, so redact at the collector) |
 
 Authentication uses `otelHeadersHelper` → `/usr/local/bin/claude-otel-headers`, which reads a per-user token from the OS keychain, so no token sits in a world-readable file. Edit the lookup in `enterprise/claude-otel-headers.sh` to match how your org provisions tokens. Dynamic headers require an `http/*` protocol.
 
@@ -174,6 +175,8 @@ Recommendations:
 - Add a redaction processor in the OpenTelemetry Collector (for example the `redaction` or `transform` processor) that masks emails, card numbers and key patterns in `prompt` attributes. The prompt guard blocks most such prompts, but treat the collector as a second line of defence.
 - Restrict who can read prompt events, and set retention to match your security-log policy.
 - Leave `OTEL_LOG_ASSISTANT_RESPONSES` and `OTEL_LOG_RAW_API_BODIES` off unless an investigation needs them (data minimisation).
+- Attribute events to people from the authenticated collector token (or mTLS certificate), not from the `X-Claude-User` header, which the client controls.
+- Whether a `claude_code.user_prompt` event is emitted before the prompt guard blocks a prompt is not documented; assume it can be, and rely on collector-side redaction.
 
 ### B4. Verify on a managed machine
 
@@ -252,7 +255,7 @@ What happens on each call:
 | Variable | Default | Meaning |
 |---|---|---|
 | `CLAUDE_SAFEGUARD_MODEL` | `claude-opus-5-5` | Model ID |
-| `CLAUDE_SAFEGUARD_BLOCK_ON` | `critical` | Severities that refuse the request locally: `critical`, `high,critical`, or `none` |
+| `CLAUDE_SAFEGUARD_BLOCK_ON` | `critical` | Lowest severity that refuses the request locally: `critical`, `high`, `medium`, or `none` (redact only) |
 | `CLAUDE_SAFEGUARD_REDACT_MIN` | `medium` | Lowest severity that gets masked |
 | `CLAUDE_SAFEGUARD_OUTPUT_ACTION` | `raise` | On BLOCK: `raise`, `sanitize` (strip spans), or `warn` |
 | `CLAUDE_SAFEGUARD_FALLBACKS` | `1` | Server-side refusal fallback. **Set `0` on Amazon Bedrock, Vertex AI and Microsoft Foundry**, which don't support it |
@@ -292,7 +295,7 @@ python3 scripts/claude_safeguard.py ask --user "$USER" "Explain this stack trace
 
 ## Changing the guardrails
 
-All guardrail files are owned by AppSec in CODEOWNERS. Claude asks before editing them, and `validate-claude-config` fails any commit where `.claude/settings.json` or `.mcp.json` drops a baseline control listed in `config/claude-guardrails-policy.json` (required deny/ask rules and hooks, sandbox, bypass lock, approved MCP URLs). To change a control:
+All guardrail files are owned by AppSec in CODEOWNERS. Claude asks before editing them (including shell writes such as `echo > .claude/...`), and `validate-claude-config` fails any commit where `.claude/settings.json` or `.mcp.json` drifts from `config/claude-guardrails-policy.json`. It checks the required deny/ask rules, that each hook is wired with a matcher covering its tools, the sandbox settings and domain list, the bypass lock and approved MCP URLs. It also rejects wildcard allow rules and credential or endpoint overrides in shared settings (`apiKeyHelper`, `ANTHROPIC_*`, `*_BASE_URL`, proxies, `statusLine`). To change a control:
 
 1. Edit the setting, update the policy file in the same commit, and say why in the PR.
 2. Run `python3 -m pytest` and `pre-commit run --all-files`.

@@ -81,6 +81,7 @@ net_cmd="w""get -qO- https://example.com"  # split so this script does not trip 
 expect_decision bash_guard.py "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$net_cmd\"}}" deny
 expect_decision bash_guard.py '{"tool_name":"Bash","tool_input":{"command":"cat .env"}}' deny
 expect_decision file_guard.py '{"tool_name":"Edit","tool_input":{"file_path":"infra/main.tf","new_string":"x"}}' ask
+expect_decision read_guard.py '{"tool_name":"Read","tool_input":{"file_path":"config/.env.prod"}}' deny
 fake_key="sk-ant-""api03-$(printf 'Zq9xLm2Pw7%.0s' 1 2 3 4 5)"
 expect_decision prompt_guard.py "{\"prompt\":\"key $fake_key\"}" block
 quiet="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git status"}}' | python3 .claude/hooks/bash_guard.py)"

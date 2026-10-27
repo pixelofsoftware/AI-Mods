@@ -57,7 +57,7 @@ What the tooling does for you:
 | Control | Behaviour |
 |---|---|
 | Prompt guard (Claude Code) | Blocks prompts that contain credentials (no override) and regulated PII. You get a redacted copy to resubmit. For synthetic data, add `[sensitive-ok: <reason>]`; the override is logged. Emails and phone numbers only trigger a reminder. |
-| File and shell guards | Claude cannot read `.env`, keys, `~/.ssh`, `~/.aws`, cloud secret stores, or dump environment variables. |
+| Read, file and shell guards | Claude cannot read `.env` (any variant except `.env.example`), `.envrc`, keys, kubeconfigs, `~/.ssh`, `~/.aws` or cloud secret stores, and cannot dump environment variables, whether through Read/Grep/Glob or any shell command. |
 | API safeguard | Apps calling the Claude API redact PII and credentials before the request leaves the process (§6). |
 
 Detection is pattern-based. It **will** miss free-text personal data such as a patient's name and diagnosis written in prose. The rule above is what matters; the tooling is a safety net.
@@ -95,7 +95,7 @@ Claude Code asks for explicit approval before editing these paths, even in accep
 
 **Arbitrary network access from the agent shell is blocked outright.** Prompt injection in a README, issue or web page can turn a single `curl` into data exfiltration. Package managers and git can reach only the allowlisted registries through the sandbox. If Claude needs something from the internet, it will tell you what and why, and you fetch it.
 
-The block is enforced in three layers: permission rules, a hook that parses the real command (catching `/usr/bin/curl`, `bash -c '…'`, `$(…)`), and the OS-level sandbox network allowlist.
+The block is enforced in three layers: permission rules, a hook that parses the real command (catching `/usr/bin/curl`, `bash -c '…'`, `$(…)`, heredocs, `find -exec`), and the OS-level sandbox network allowlist. Allowlisted test runners execute code Claude wrote, so the sandbox, not the allowlist, is the control that contains them.
 
 ### 4.2 Web access
 

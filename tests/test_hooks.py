@@ -49,6 +49,7 @@ DENY = [
     "docker run --privileged -v /:/host alpine",
     "echo cm0= | base64 -d | bash",
     "dd if=/dev/zero of=/dev/sda",
+    "git config core.hooksPath /dev/null",
 ]
 
 ASK = [
@@ -57,7 +58,6 @@ ASK = [
     "kubectl apply -f deploy.yaml",
     "git reset --hard HEAD~3",
     "git push --force-with-lease origin feature",
-    "git config core.hooksPath /dev/null",
     "chmod 777 uploads",
     "helm upgrade api ./chart",
     "aws s3 rb s3://bucket --force",

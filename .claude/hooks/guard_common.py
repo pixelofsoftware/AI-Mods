@@ -36,6 +36,7 @@ __all__ = [
     "GUARDRAIL_PATH_RE",
     "IAC_PATH_RE",
     "SECURITY_CRITICAL_PATH_RE",
+    "MAX_SCAN_CHARS",
     "read_event",
     "pre_tool_decision",
     "audit",
@@ -48,6 +49,9 @@ AUDIT_DIR = PROJECT_DIR / ".claude" / "audit"
 SECRET_PATH_RE = re.compile(
     r"""(?ix)
     (?:^|[/\\])\.env(?:\.(?!example$|sample$|template$|dist$|defaults$)[\w.\-]+)?$
+  | (?:^|[/\\])\.envrc$
+  | (?:^|[/\\])kubeconfig[\w.\-]*$
+  | ^/proc/[^/]+/environ$
   | (?:^|[/\\])(?:id_rsa|id_dsa|id_ecdsa|id_ed25519)$
   | \.(?:pem|key|p12|pfx|jks|keystore|kdbx|ppk|asc|gpg)$
   | (?:^|[/\\])\.(?:aws|ssh|gnupg|kube|docker|azure)(?:[/\\]|$)
@@ -62,7 +66,7 @@ SECRET_PATH_RE = re.compile(
 
 # Changes to the guardrails themselves always need a human.
 GUARDRAIL_PATH_RE = re.compile(
-    r"""(?x)
+    r"""(?ix)
     (?:^|/)\.claude/
   | (?:^|/)\.mcp\.json$
   | (?:^|/)CLAUDE\.md$
@@ -90,8 +94,12 @@ IAC_PATH_RE = re.compile(
 
 # Security-critical application code: auth, crypto, access control.
 SECURITY_CRITICAL_PATH_RE = re.compile(
-    r"(?i)(?:^|/)(?:auth|authn|authz|oauth|sso|saml|security|crypto|iam|rbac|acl|permissions?|secrets?|keys?)(?:/|\.\w+$|_)"
+    r"(?i)(?:^|/)(?:auth\w*|oauth\w*|sso|saml|security|crypto\w*|iam|rbac|acl|permissions?|secrets?|keys?)(?:/|\.\w+$|_)"
 )
+
+# Hooks scan at most this many characters; anything larger is sent for human review
+# so a huge payload cannot push a hook past its timeout (which would fail open).
+MAX_SCAN_CHARS = 500_000
 
 
 def read_event() -> Dict[str, Any]:

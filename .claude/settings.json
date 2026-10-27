@@ -33,7 +33,8 @@
       "Bash(mypy *)",
       "Bash(go test ./...)",
       "Bash(go vet ./...)",
-      "Bash(pre-commit run *)",
+      "Bash(pre-commit run)",
+      "Bash(pre-commit run --all-files)",
       "Bash(terraform fmt -check *)",
       "Bash(terraform validate)",
       "Bash(python3 scripts/claude_safeguard.py scan *)",
@@ -214,6 +215,16 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/file_guard.py\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Glob|NotebookRead",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/read_guard.py\"",
             "timeout": 15
           }
         ]

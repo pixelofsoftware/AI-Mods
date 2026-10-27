@@ -21,10 +21,13 @@ if [[ -z "${token}" && -r "${HOME}/.config/claude-otel/token" ]]; then
   token="$(<"${HOME}/.config/claude-otel/token")"
 fi
 
-user="${USER:-${USERNAME:-unknown}}"
-if [[ -n "${token}" ]]; then
-  printf '{"Authorization":"Bearer %s","X-Claude-User":"%s"}\n' "${token}" "${user}"
-else
-  # Collector should reject unauthenticated writes; emit only the identity header.
-  printf '{"X-Claude-User":"%s"}\n' "${user}"
-fi
+# X-Claude-User is informational only: the collector must derive identity from the
+# authenticated token (or mTLS certificate), because the client controls $USER.
+# json.dumps escapes values, so a token or user name cannot break the JSON.
+CLAUDE_OTEL_TOKEN="${token}" CLAUDE_OTEL_USER="${USER:-${USERNAME:-unknown}}" python3 -c '
+import json, os
+headers = {"X-Claude-User": os.environ["CLAUDE_OTEL_USER"]}
+if os.environ["CLAUDE_OTEL_TOKEN"]:
+    headers["Authorization"] = "Bearer " + os.environ["CLAUDE_OTEL_TOKEN"]
+print(json.dumps(headers))
+'

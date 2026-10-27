@@ -18,9 +18,10 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import re
 import sys
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,13 +43,32 @@ def load_policy(root: Path) -> Dict[str, Any]:
 
 
 def _matches(path: str, pattern: str) -> bool:
-    """gitignore-like: a pattern without '/' matches the basename at any depth."""
-    p = PurePosixPath(path)
+    """gitignore-like matching.
+
+    A pattern without '/' matches the basename at any depth; `**/` may match zero
+    or more directories (`.claude/**/*.jsonl` matches `.claude/x.jsonl`).
+    """
     if "/" not in pattern.rstrip("/*"):
-        return fnmatch.fnmatchcase(p.name, pattern)
-    if pattern.startswith("**/"):
-        pattern = pattern[3:]
-    return fnmatch.fnmatchcase(path, pattern) or fnmatch.fnmatchcase(path, "*/" + pattern)
+        return fnmatch.fnmatchcase(PurePosixPath(path).name, pattern)
+    variants = {pattern}
+    while any("**/" in v for v in variants):
+        variants = {w for v in variants for w in (v.replace("**/", "", 1), v.replace("**/", "*/", 1))} | {
+            v for v in variants if "**/" not in v
+        }
+    return any(fnmatch.fnmatchcase(path, v) or fnmatch.fnmatchcase(path, "*/" + v) for v in variants)
+
+
+def _is_claude_transcript(path: str) -> bool:
+    """Claude Code session transcripts are JSONL with sessionId + user/assistant records."""
+    if not path.endswith(".jsonl"):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            head = [fh.readline() for _ in range(20)]
+    except OSError:
+        return False
+    blob = "".join(head)
+    return '"sessionId"' in blob and ('"type":"user"' in blob.replace(" ", "") or '"type":"assistant"' in blob.replace(" ", ""))
 
 
 def forbidden(paths: Iterable[str], policy: Dict[str, Any]) -> List[str]:
@@ -59,7 +79,7 @@ def forbidden(paths: Iterable[str], policy: Dict[str, Any]) -> List[str]:
             path = path[2:]
         if any(_matches(path, a) for a in policy.get("allowed_paths", [])):
             continue
-        if any(_matches(path, f) for f in policy.get("forbidden_paths", [])):
+        if any(_matches(path, f) for f in policy.get("forbidden_paths", [])) or _is_claude_transcript(path):
             bad.append(path)
     return bad
 
@@ -93,9 +113,16 @@ def _get(d: Dict[str, Any], dotted: str) -> Any:
 
 def url_allowed(url: str, patterns: Sequence[str]) -> bool:
     """Match scheme, host (with * wildcard) and path separately, so wildcards cannot cross '/'."""
+    # Python's urlsplit and the WHATWG parser Claude Code uses disagree on "\\" and
+    # userinfo ("https://evil\\@good/"); refuse anything ambiguous outright.
+    if not isinstance(url, str) or re.search(r"[\\@\s\x00-\x1f\x7f]", url):
+        return False
     try:
         u = urlsplit(url)
+        _ = u.port
     except ValueError:
+        return False
+    if u.username is not None or u.password is not None:
         return False
     for pat in patterns:
         p = urlsplit(pat)
@@ -133,23 +160,69 @@ def check_settings(settings: Dict[str, Any], policy: Dict[str, Any]) -> List[str
     for rule in policy.get("required_ask_rules", []):
         if rule not in ask and rule not in deny:
             errors.append(f".claude/settings.json: required ask rule missing: {rule}")
-    for rule in policy.get("forbidden_allow_rules", []):
-        if rule in allow:
-            errors.append(f".claude/settings.json: forbidden allow rule: {rule}")
+    for rule in allow:
+        for pattern in policy.get("forbidden_allow_rule_patterns", []):
+            if re.search(pattern, rule):
+                errors.append(f".claude/settings.json: forbidden allow rule: {rule}")
+                break
     for rule in allow:
         if rule.startswith("mcp__") and rule.split("__")[1] not in set(settings.get("enabledMcpjsonServers", [])):
             errors.append(f".claude/settings.json: allow rule for unapproved MCP server: {rule}")
 
-    for event, scripts in policy.get("required_hooks", {}).items():
-        event_blob = json.dumps(settings.get("hooks", {}).get(event, []))
-        for script in scripts:
-            if script not in event_blob:
-                errors.append(f".claude/settings.json: required {event} hook missing: {script}")
-    if settings.get("disableAllHooks") is True:
-        errors.append(".claude/settings.json: disableAllHooks must not be true")
+    errors += check_hooks(settings.get("hooks", {}), policy)
+
+    for key in policy.get("forbidden_settings_keys", []):
+        if key in settings:
+            errors.append(f".claude/settings.json: `{key}` is not allowed in shared project settings")
+    for name in settings.get("env", {}):
+        for pattern in policy.get("forbidden_env_patterns", []):
+            if re.search(pattern, name):
+                errors.append(f".claude/settings.json: env `{name}` is not allowed in shared project settings")
+                break
+    allowed_domains = set(policy.get("allowed_sandbox_domains", []))
+    for domain in _get(settings, "sandbox.network.allowedDomains") or []:
+        if domain not in allowed_domains:
+            errors.append(f".claude/settings.json: sandbox domain `{domain}` is not in allowed_sandbox_domains")
     if any(k.startswith("OTEL_") for k in settings.get("env", {})):
         # Not an error, but a common misconception worth flagging.
         print("note: OTEL_* exporter variables in .claude/settings.json are ignored by Claude Code; set them in managed settings.")
+    return errors
+
+
+def _matcher_covers(matcher: str, tool: str) -> bool:
+    if matcher in {"", "*"}:
+        return True
+    try:
+        return re.fullmatch(matcher, tool) is not None
+    except re.error:
+        return False
+
+
+def check_hooks(hooks: Dict[str, Any], policy: Dict[str, Any]) -> List[str]:
+    """Each required script must be wired on its event with a matcher that covers its tools,
+    and no hook may run a script outside the approved set."""
+    errors = []
+    allowed = set(policy.get("allowed_hook_scripts", []))
+    wired: Dict[str, List[Tuple[str, str]]] = {}
+    for event, groups in (hooks or {}).items():
+        for group in groups or []:
+            matcher = str(group.get("matcher", ""))
+            for handler in group.get("hooks", []) or []:
+                command = str(handler.get("command", "") or handler.get("url", "") or handler.get("type", ""))
+                script = next((s for s in allowed if s in command), None)
+                if script is None:
+                    errors.append(f".claude/settings.json: {event} hook `{command[:80]}` is not an approved guardrail script")
+                    continue
+                wired.setdefault(event, []).append((script, matcher))
+    for event, scripts in policy.get("required_hooks", {}).items():
+        for script, tools in scripts.items():
+            entries = [m for s, m in wired.get(event, []) if s == script]
+            if not entries:
+                errors.append(f".claude/settings.json: required {event} hook missing: {script}")
+                continue
+            for tool in tools:
+                if not any(_matcher_covers(m, tool) for m in entries):
+                    errors.append(f".claude/settings.json: {event} hook {script} must match tool `{tool}`")
     return errors
 
 
