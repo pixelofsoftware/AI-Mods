@@ -50,17 +50,23 @@ esac
 
 if [[ "$CHECK_ONLY" -eq 0 ]]; then
   echo "2. Install"
+  # Inside a virtualenv `--user` is rejected; outside one it keeps system Python clean.
+  PIP_USER=(--user)
+  [[ -n "${VIRTUAL_ENV:-}" ]] && PIP_USER=()
   if ! command -v pre-commit >/dev/null 2>&1; then
-    if command -v pipx >/dev/null 2>&1; then pipx install "pre-commit>=4.7"
-    else python3 -m pip install --user "pre-commit>=4.7"; fi
+    if command -v pipx >/dev/null 2>&1; then pipx install "pre-commit>=4.7" || true
+    else python3 -m pip install ${PIP_USER[@]+"${PIP_USER[@]}"} "pre-commit>=4.7" || true; fi
   fi
-  if command -v pre-commit >/dev/null 2>&1; then
-    pre-commit install --install-hooks >/dev/null && ok "pre-commit hooks installed (pre-commit + pre-push)"
-  else
+  if ! command -v pre-commit >/dev/null 2>&1; then
     fail "pre-commit not on PATH after install; add ~/.local/bin to PATH and re-run"
+  elif pre-commit install --install-hooks >/dev/null; then
+    ok "pre-commit hooks installed (pre-commit + pre-push)"
+  else
+    fail "pre-commit install failed (see the error above; a custom core.hooksPath is a common cause)"
   fi
   if [[ "$WITH_SDK" -eq 1 ]]; then
-    python3 -m pip install --user "anthropic>=2.3,<3" >/dev/null && ok "anthropic SDK installed"
+    if python3 -m pip install ${PIP_USER[@]+"${PIP_USER[@]}"} "anthropic>=2.3,<3" >/dev/null; then ok "anthropic SDK installed"
+    else fail "anthropic SDK install failed"; fi
   fi
   mkdir -p .claude/audit && ok "local audit directory .claude/audit (gitignored)"
 fi

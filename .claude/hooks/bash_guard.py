@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import GUARDRAIL_PATH_RE, SECRET_PATH_RE, audit, fingerprint, pre_tool_decision, read_event  # noqa: E402
+from guard_common import GUARDRAIL_PATH_RE, audit, fingerprint, looks_secret, pre_tool_decision, read_event  # noqa: E402
 
 MAX_DEPTH = 3
 MAX_COMMAND_CHARS = 100_000
@@ -74,7 +74,6 @@ INLINE_NET_RE = re.compile(
     r"urllib|requests\.|httpx|aiohttp|http\.client|socket\.|smtplib|ftplib|paramiko|fetch\(|XMLHttpRequest|axios|"
     r"\bnet\.|https?\.(?:get|request)|child_process|Net::HTTP|open-uri|LWP::|Invoke-WebRequest|curl_exec"
 )
-ENV_GLOB_RE = re.compile(r"(?:^|/)\.env[^/]*[*?\[]")
 HEREDOC_RE = re.compile(r"(?<!<)<<(-?)\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
 # Commands that only look at a path's metadata, or remove/ignore it.
 SAFE_SECRET_PATH_CMDS = {"ls", "stat", "test", "[", "rm", "touch", "mkdir", "chmod", "realpath", "dirname", "basename", "file"}
@@ -87,7 +86,7 @@ KUBECTL_VALUE_FLAGS = {"-n", "--namespace", "--context", "--cluster", "--kubecon
 
 
 @dataclass
-class Verdict:
+class Decision:
     deny: List[str] = field(default_factory=list)
     ask: List[str] = field(default_factory=list)
     rules: List[str] = field(default_factory=list)
@@ -96,7 +95,7 @@ class Verdict:
         (self.deny if level == "deny" else self.ask).append(reason)
         self.rules.append(rule)
 
-    def merge(self, other: "Verdict") -> None:
+    def merge(self, other: "Decision") -> None:
         self.deny += other.deny
         self.ask += other.ask
         self.rules += other.rules
@@ -164,14 +163,14 @@ def logical_lines(command: str) -> List[Tuple[str, List[Tuple[str, bool]]]]:
 
 
 def tokenize(line: str) -> List[str]:
-    lex = shlex.shlex(line, posix=True, punctuation_chars=";&|(){}<>!")
+    lex = shlex.shlex(line, posix=True, punctuation_chars=";&|()<>!")
     lex.whitespace = " \t\n"
     lex.whitespace_split = True
     lex.commenters = ""
     tokens: List[str] = []
     for tok in lex:
         # shlex groups adjacent punctuation, e.g. ")|" or ";;"; split runs we care about.
-        if tok and set(tok) <= set(";&|(){}<>!") and tok not in SEPARATORS | REDIRECTS and tok != "{}":
+        if tok and set(tok) <= set(";&|()<>!") and tok not in SEPARATORS | REDIRECTS:
             tokens.extend(_split_punct(tok))
         else:
             tokens.append(tok)
@@ -311,13 +310,13 @@ def _path_candidates(arg: str) -> List[str]:
 def _secret_reference(args: Iterable[str]) -> Optional[str]:
     for a in args:
         for cand in _path_candidates(a):
-            if SECRET_PATH_RE.search(cand.replace("~", "/home")) or ENV_GLOB_RE.search(cand):
+            if looks_secret(cand):
                 return cand
     return None
 
 
-def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[str], depth: int, raw_command: str) -> Verdict:
-    v = Verdict()
+def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[str], depth: int, raw_command: str) -> Decision:
+    v = Decision()
     argv = strip_wrappers(raw_argv)
     redirs = redirections(raw_argv)
     if not argv:
@@ -344,7 +343,7 @@ def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[
         else:
             v.add("ask", "dynamic_command", "command name is computed at runtime and cannot be checked")
 
-    if cmd in PRIV_ESC or any(os.path.basename(a) in PRIV_ESC for a in raw_argv[:3]):
+    if cmd in PRIV_ESC:
         v.add("deny", "privilege_escalation", "privilege escalation (sudo/su/doas) is not permitted for the AI agent")
 
     if cmd in NETWORK_EGRESS:
@@ -542,9 +541,9 @@ def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[
     return v
 
 
-def _substitutions(text: str, depth: int) -> Verdict:
+def _substitutions(text: str, depth: int) -> Decision:
     """Analyse $(...) and `...` bodies, which run even inside double quotes."""
-    v = Verdict()
+    v = Decision()
     if re.search(r"/dev/(?:tcp|udp)/", text):
         v.add("deny", "network_egress", "raw /dev/tcp socket")
     for inner in re.findall(r"\$\(([^()]*)\)|`([^`]*)`", text):
@@ -557,8 +556,8 @@ def _substitutions(text: str, depth: int) -> Verdict:
     return v
 
 
-def analyze(command: str, depth: int = 0) -> Verdict:
-    v = Verdict()
+def analyze(command: str, depth: int = 0) -> Decision:
+    v = Decision()
     if len(command) > MAX_COMMAND_CHARS:
         v.add("ask", "oversized", "command too large to analyse")
         return v

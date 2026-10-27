@@ -57,7 +57,7 @@ What the tooling does for you:
 | Control | Behaviour |
 |---|---|
 | Prompt guard (Claude Code) | Blocks prompts that contain credentials (no override) and regulated PII. You get a redacted copy to resubmit. For synthetic data, add `[sensitive-ok: <reason>]`; the override is logged. Emails and phone numbers only trigger a reminder. |
-| Read, file and shell guards | Claude cannot read `.env` (any variant except `.env.example`), `.envrc`, keys, kubeconfigs, `~/.ssh`, `~/.aws` or cloud secret stores, and cannot dump environment variables, whether through Read/Grep/Glob or any shell command. |
+| Read, file and shell guards | Claude cannot read `.env` (any variant except the templates `.env.example`, `.sample`, `.template`, `.dist` and `.defaults`), `.envrc`, keys, kubeconfigs, `~/.ssh`, `~/.aws` or cloud secret stores, and cannot dump environment variables, whether through Read/Grep/Glob or any shell command. |
 | API safeguard | Apps calling the Claude API redact PII and credentials before the request leaves the process (§6). |
 
 Detection is pattern-based. It **will** miss free-text personal data such as a patient's name and diagnosis written in prose. The rule above is what matters; the tooling is a safety net.
@@ -73,7 +73,7 @@ All AI-assisted code goes through normal pull-request review. **Tier 2 changes a
 | Infrastructure-as-code | `*.tf`, `*.tfvars`, `*.hcl`, `Dockerfile*`, `k8s/`, `helm/` | Platform Engineering |
 | CI/CD | `.github/workflows/` | Platform Engineering + AppSec |
 | Security-critical code | `auth/`, `security/`, `crypto/`, access-control and payment logic | AppSec |
-| The guardrails | `.claude/`, `.mcp.json`, `CLAUDE.md`, `.pre-commit-config.yaml`, `scripts/claude_safeguard.py`, `config/claude-guardrails-policy.json`, `enterprise/` | AppSec |
+| The guardrails | `.claude/`, `.mcp.json`, `CLAUDE.md`, `.pre-commit-config.yaml`, `.gitignore`, `pyproject.toml`, `scripts/claude_safeguard.py`, `scripts/precommit/`, `scripts/setup_guardrails.sh`, `config/claude-guardrails-policy.json`, `enterprise/`, `docs/claude-guardrails*.md` | AppSec |
 
 For Tier 2 pull requests the author must:
 

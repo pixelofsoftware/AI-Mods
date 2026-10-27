@@ -31,7 +31,7 @@ def test_ac2_settings_allowlist_and_denials():
 
 def test_ac2_hooks_and_sandbox_wired():
     hooks = json.dumps(SETTINGS["hooks"])
-    for name in ["prompt_guard.py", "bash_guard.py", "file_guard.py"]:
+    for name in ["prompt_guard.py", "bash_guard.py", "file_guard.py", "read_guard.py"]:
         assert name in hooks
         assert (ROOT / ".claude/hooks" / name).exists()
     assert SETTINGS["sandbox"]["enabled"] is True

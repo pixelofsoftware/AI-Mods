@@ -30,6 +30,8 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from claude_safeguard import CREDENTIAL_CATEGORIES, Redactor, Severity  # noqa: E402
 
 POLICY_REL = "config/claude-guardrails-policy.json"
+# The only accepted hook command shape: the repo's own script, run by python3, nothing else.
+HOOK_COMMAND_RE = re.compile(r'python3 "\$\{CLAUDE_PROJECT_DIR\}/\.claude/hooks/([a-z_]+\.py)"')
 MAX_SCAN_BYTES = 2_000_000
 
 
@@ -209,7 +211,8 @@ def check_hooks(hooks: Dict[str, Any], policy: Dict[str, Any]) -> List[str]:
             matcher = str(group.get("matcher", ""))
             for handler in group.get("hooks", []) or []:
                 command = str(handler.get("command", "") or handler.get("url", "") or handler.get("type", ""))
-                script = next((s for s in allowed if s in command), None)
+                m = HOOK_COMMAND_RE.fullmatch(command) if handler.get("type") == "command" else None
+                script = m.group(1) if m and m.group(1) in allowed else None
                 if script is None:
                     errors.append(f".claude/settings.json: {event} hook `{command[:80]}` is not an approved guardrail script")
                     continue
@@ -268,7 +271,7 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
         mcp = json.loads(mcp_path.read_text(encoding="utf-8")) if mcp_path.exists() else {"mcpServers": {}}
     except (OSError, json.JSONDecodeError) as exc:
         print(f"could not read guardrail config: {exc}")
-        return 1
+        return 2
     errors = check_settings(settings, policy) + check_mcp(mcp, settings, policy)
     if errors:
         print("AI guardrail configuration drift detected:")

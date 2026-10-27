@@ -26,4 +26,8 @@ scripts/claude_safeguard.py   @your-org/appsec
 scripts/precommit/            @your-org/appsec
 enterprise/                   @your-org/appsec @your-org/it-endpoint
 docs/claude-guardrails.md     @your-org/appsec
+docs/claude-guardrails-setup.md  @your-org/appsec
+scripts/setup_guardrails.sh   @your-org/appsec
+pyproject.toml                @your-org/appsec
+.gitignore                    @your-org/appsec
 .github/CODEOWNERS            @your-org/appsec

@@ -7,7 +7,7 @@ A guardrail framework for developing software with Anthropic's Claude (Claude Co
 
 ```bash
 scripts/setup_guardrails.sh      # developers: install hooks + self-test
-python3 -m pytest                # tests for hooks, wrapper and validators
+python3 -m pip install pytest pyyaml && python3 -m pytest   # tests for hooks, wrapper and validators
 pre-commit run --all-files       # everything CI runs
 ```
 

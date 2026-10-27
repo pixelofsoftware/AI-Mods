@@ -21,6 +21,10 @@ if [[ -z "${token}" && -r "${HOME}/.config/claude-otel/token" ]]; then
   token="$(<"${HOME}/.config/claude-otel/token")"
 fi
 
+if [[ -z "${token}" ]]; then
+  echo "claude-otel-headers: no ingest token found (keychain item 'claude-otel-ingest' or ~/.config/claude-otel/token); the collector will reject exports" >&2
+fi
+
 # X-Claude-User is informational only: the collector must derive identity from the
 # authenticated token (or mTLS certificate), because the client controls $USER.
 # json.dumps escapes values, so a token or user name cannot break the JSON.

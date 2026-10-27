@@ -11,14 +11,12 @@ pattern the Bash and file guards use, so every variant is denied in one place.
 from __future__ import annotations
 
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_common import SECRET_PATH_RE, audit, pre_tool_decision, read_event  # noqa: E402
+from guard_common import audit, looks_secret, pre_tool_decision, read_event  # noqa: E402
 
 READ_TOOLS = {"Read", "Grep", "Glob", "NotebookRead"}
-ENV_GLOB_RE = re.compile(r"(?:^|/)\.env[^/]*[*?\[{]|(?:^|/)\*\.(?:pem|key|p12|pfx)$")
 
 
 def targets(tool_name: str, tool_input: dict) -> list:
@@ -34,8 +32,7 @@ def main() -> None:
         return
     tool_input = event.get("tool_input") or {}
     for target in targets(event["tool_name"], tool_input):
-        expanded = target.replace("~", "/home")
-        if SECRET_PATH_RE.search(expanded) or ENV_GLOB_RE.search(target):
+        if looks_secret(target):
             audit("read_guard", event, "deny", ["secret_file_read"], {"target": os.path.basename(target)})
             pre_tool_decision(
                 "deny",

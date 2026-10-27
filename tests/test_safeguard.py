@@ -166,7 +166,7 @@ class FakeMessages:
 def make_guard(messages: FakeMessages, **policy):
     client = SimpleNamespace(beta=SimpleNamespace(messages=messages), messages=messages)
     buf = io.StringIO()
-    guard = cs.SafeClaude(client, policy=cs.Policy(**policy), audit=cs.AuditLogger(stream=buf, logger_name=f"t.{id(buf)}"))
+    guard = cs.SafeClaude(client, policy=cs.Policy(**policy), audit=cs.AuditLogger(stream=buf))
     return guard, buf
 
 

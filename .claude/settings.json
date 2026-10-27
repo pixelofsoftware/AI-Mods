@@ -83,7 +83,13 @@
       "Edit(/.github/CODEOWNERS)",
       "Edit(/scripts/claude_safeguard.py)",
       "Edit(/scripts/precommit/**)",
-      "Edit(/config/claude-guardrails-policy.json)"
+      "Edit(/config/claude-guardrails-policy.json)",
+      "Edit(/enterprise/**)",
+      "Edit(/docs/claude-guardrails.md)",
+      "Edit(/docs/claude-guardrails-setup.md)",
+      "Edit(/scripts/setup_guardrails.sh)",
+      "Edit(/pyproject.toml)",
+      "Edit(/.gitignore)"
     ],
     "deny": [
       "WebSearch",

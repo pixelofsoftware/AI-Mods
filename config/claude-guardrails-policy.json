@@ -135,12 +135,26 @@
     ".npmrc",
     ".pypirc",
     "anthropic_api_key*",
-    "*.anthropic-key"
+    "*.anthropic-key",
+    ".envrc",
+    "kubeconfig*",
+    ".git-credentials",
+    ".pgpass",
+    "**/secrets/*",
+    "*.kdbx",
+    "*.ppk",
+    "*.keystore",
+    "service_account*.json",
+    "client_secrets.json",
+    "*.tfstate.*",
+    "id_dsa*"
   ],
   "allowed_paths": [
     ".env.example",
     ".env.sample",
     ".env.template",
+    ".env.dist",
+    ".env.defaults",
     "*.pub"
   ]
 }

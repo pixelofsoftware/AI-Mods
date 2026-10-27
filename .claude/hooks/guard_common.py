@@ -36,6 +36,9 @@ __all__ = [
     "GUARDRAIL_PATH_RE",
     "IAC_PATH_RE",
     "SECURITY_CRITICAL_PATH_RE",
+    "ENV_GLOB_RE",
+    "ENV_TEMPLATE_SUFFIXES",
+    "looks_secret",
     "MAX_SCAN_CHARS",
     "read_event",
     "pre_tool_decision",
@@ -43,17 +46,22 @@ __all__ = [
     "fingerprint",
 ]
 
-AUDIT_DIR = PROJECT_DIR / ".claude" / "audit"
+# Overridable so tests (and CI) never write into a developer's real audit log.
+AUDIT_DIR = Path(os.environ.get("CLAUDE_GUARDRAIL_AUDIT_DIR") or PROJECT_DIR / ".claude" / "audit")
+
+# Template suffixes that are safe to read and commit (keep in sync with the policy
+# allowed_paths and .gitignore; tests/test_drift.py enforces it).
+ENV_TEMPLATE_SUFFIXES = ("example", "sample", "template", "dist", "defaults")
 
 # Files that hold secrets. `.env.example` style templates stay usable.
 SECRET_PATH_RE = re.compile(
     r"""(?ix)
-    (?:^|[/\\])\.env(?:\.(?!example$|sample$|template$|dist$|defaults$)[\w.\-]+)?$
+    (?:^|[/\\])\.env(?:\.(?!(?:example|sample|template|dist|defaults)$)[\w.\-]+)?$
   | (?:^|[/\\])\.envrc$
   | (?:^|[/\\])kubeconfig[\w.\-]*$
   | ^/proc/[^/]+/environ$
   | (?:^|[/\\])(?:id_rsa|id_dsa|id_ecdsa|id_ed25519)$
-  | \.(?:pem|key|p12|pfx|jks|keystore|kdbx|ppk|asc|gpg)$
+  | \.(?:pem|key|p12|pfx|jks|keystore|kdbx|ppk)$
   | (?:^|[/\\])\.(?:aws|ssh|gnupg|kube|docker|azure)(?:[/\\]|$)
   | (?:^|[/\\])\.config[/\\]gcloud(?:[/\\]|$)
   | (?:^|[/\\])\.(?:netrc|npmrc|pypirc|pgpass|git-credentials)$
@@ -77,8 +85,21 @@ GUARDRAIL_PATH_RE = re.compile(
   | (?:^|/)(?:\.github/)?CODEOWNERS$
   | (?:^|/)config/claude-guardrails-policy\.json$
   | (?:^|/)\.github/workflows/
+  | (?:^|/)enterprise/
+  | (?:^|/)docs/claude-guardrails(?:-setup)?\.md$
+  | (?:^|/)scripts/setup_guardrails\.sh$
+  | (?:^|/)pyproject\.toml$
+  | (?:^|/)\.gitignore$
     """
 )
+
+# Globs that expand to secrets files: `.env*`, `.env.{prod,local}`, `*.pem`.
+ENV_GLOB_RE = re.compile(r"(?:^|/)\.env[^/]*[*?\[{]|(?:^|/)\*\.(?:pem|key|p12|pfx)$")
+
+
+def looks_secret(path: str) -> bool:
+    """True if a path (or glob) names secret material. `~` is treated as a home directory."""
+    return bool(SECRET_PATH_RE.search(path.replace("~", "/home/user")) or ENV_GLOB_RE.search(path))
 
 # Infrastructure-as-code: AI-generated changes require human-in-the-loop review.
 IAC_PATH_RE = re.compile(
@@ -103,11 +124,14 @@ MAX_SCAN_CHARS = 500_000
 
 
 def read_event() -> Dict[str, Any]:
+    """Parse the hook event. Malformed input raises, so the hook's fail-closed path runs."""
     raw = sys.stdin.read()
-    try:
-        return json.loads(raw) if raw.strip() else {}
-    except json.JSONDecodeError:
+    if not raw.strip():
         return {}
+    event = json.loads(raw)
+    if not isinstance(event, dict):
+        raise ValueError("hook event is not a JSON object")
+    return event
 
 
 def fingerprint(value: str) -> str:

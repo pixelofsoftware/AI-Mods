@@ -47,11 +47,11 @@ import datetime as _dt
 import enum
 import hashlib
 import json
-import logging
 import os
 import re
 import secrets
 import sys
+import threading
 import time
 import unicodedata
 import uuid
@@ -90,7 +90,10 @@ class Severity(enum.IntEnum):
 
     @classmethod
     def parse(cls, value: str) -> "Severity":
-        return cls[value.strip().upper()]
+        try:
+            return cls[value.strip().upper()]
+        except KeyError:
+            raise ValueError(f"expected one of low|medium|high|critical, got {value!r}") from None
 
 
 @dataclass(frozen=True)
@@ -336,8 +339,8 @@ DEFAULT_RULES: Tuple[Rule, ...] = (
         "phone",
         "PHONE",
         Severity.MEDIUM,
-        _r(r"(?<![\w+])(?:\+\d{1,3}[ .\-]?)?(?:\(\d{2,4}\)|\d{2,4})[ .\-]\d{3,4}[ .\-]\d{3,4}(?![\w])"),
-        validator=lambda v: 9 <= len(_digits(v)) <= 15,
+        _r(r"(?<![\w+.])(?:\+\d{1,3}[ .\-]?)?(?:\(\d{2,4}\)|\d{2,4})[ .\-]\d{3,4}[ .\-]\d{3,4}(?![\w]|\.\d)"),
+        validator=lambda v: 9 <= len(_digits(v)) <= 15 and not re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){2,3}", v.strip()),
     ),
 )
 
@@ -346,7 +349,9 @@ CREDENTIAL_CATEGORIES = frozenset({"PRIVATE_KEY", "API_KEY", "CLOUD_CREDENTIAL",
 
 # Invisible characters used to smuggle instructions past human reviewers:
 # Unicode tag block, bidi overrides/isolates, zero-width joiners.
-INVISIBLE_CHARS_RE = re.compile("[\U000E0000-\U000E007F\u202A-\u202E\u2066-\u2069\u200B-\u200D\u2060\uFEFF]")
+# ZWNJ/ZWJ (U+200C/D) are deliberately absent: Persian, Indic scripts and emoji need them.
+INVISIBLE_CHARS_RE = re.compile("[\U000E0000-\U000E007F\u202A-\u202E\u2066-\u2069\u200B\u2060\uFEFF]")
+CHAT_TEMPLATE_TOKENS_RE = re.compile(r"<\|im_(?:start|end)\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>|</?\s*system\s*>")
 
 PROMPT_INJECTION_PATTERNS: Tuple[Tuple[str, Pattern[str]], ...] = (
     (
@@ -357,7 +362,7 @@ PROMPT_INJECTION_PATTERNS: Tuple[Tuple[str, Pattern[str]], ...] = (
     ),
     ("role_hijack", _r(r"(?i)\byou are now\b[^.\n]{0,40}\b(?:DAN|jailbroken|developer mode|unrestricted|no longer bound)\b")),
     ("system_prompt_probe", _r(r"(?i)\b(?:reveal|print|repeat|output|show)\b[^.\n]{0,30}\b(?:system|hidden|initial)\s+(?:prompt|instructions)\b")),
-    ("chat_template_tokens", _r(r"<\|im_(?:start|end)\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>|</?\s*system\s*>")),
+    ("chat_template_tokens", CHAT_TEMPLATE_TOKENS_RE),
     ("fake_turn_marker", _r(r"(?im)^\s*(?:#{2,}\s*)?(?:system|assistant)\s*:\s*\S")),
 )
 
@@ -586,7 +591,7 @@ DEFAULT_OUTPUT_RULES: Tuple[OutputRule, ...] = (
     OutputRule(
         "chat_template_tokens",
         Verdict.WARN,
-        _r(r"<\|im_(?:start|end)\|>|<\|endoftext\|>|\[/?INST\]|<<SYS>>"),
+        CHAT_TEMPLATE_TOKENS_RE,
         "chat-template control tokens echoed back",
     ),
     OutputRule(
@@ -746,26 +751,23 @@ class Policy:
         )
 
 
-class _JsonLineFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        payload = getattr(record, "event_payload", None) or {"message": record.getMessage()}
-        return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
-
-
 class AuditLogger:
-    """Writes one JSON object per line. Default sink is stdout (12-factor / SIEM agents)."""
+    """Writes one JSON object per line. Default sink is stdout (12-factor / SIEM agents).
 
-    def __init__(self, stream: Any = None, logger_name: str = "claude_safeguard.audit") -> None:
-        self.logger = logging.getLogger(logger_name)
-        self.logger.setLevel(logging.INFO)
-        self.logger.propagate = False
-        if not self.logger.handlers:
-            handler = logging.StreamHandler(stream or sys.stdout)
-            handler.setFormatter(_JsonLineFormatter())
-            self.logger.addHandler(handler)
+    Each instance writes to its own stream, so two loggers never share or swallow
+    each other's events.
+    """
+
+    def __init__(self, stream: Any = None) -> None:
+        self.stream = stream
+        self._lock = threading.Lock()
 
     def emit(self, event: Dict[str, Any]) -> None:
-        self.logger.info("audit", extra={"event_payload": event})
+        line = json.dumps(event, separators=(",", ":"), sort_keys=True, default=str) + "\n"
+        stream = self.stream or sys.stdout  # resolved per call so redirected stdout is honoured
+        with self._lock:
+            stream.write(line)
+            stream.flush()
 
 
 # --------------------------------------------------------------------------- #
@@ -1099,7 +1101,7 @@ def _cmd_check_output(args: argparse.Namespace) -> int:
 
 def _cmd_ask(args: argparse.Namespace) -> int:
     # Audit events go to stderr here so stdout carries only the answer.
-    guard = SafeClaude(audit=AuditLogger(stream=sys.stderr, logger_name="claude_safeguard.cli"))
+    guard = SafeClaude(audit=AuditLogger(stream=sys.stderr))
     try:
         result = guard.create(
             user_id=args.user,

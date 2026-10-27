@@ -152,17 +152,11 @@ def test_prompt_jwt_cannot_be_acknowledged(hook):
 def test_prompt_ack_reason_is_redacted_in_audit(tmp_path, fake):
     import os
 
-    env = {**os.environ, "CLAUDE_GUARDRAIL_AUDIT": "1"}
-    audit_file = ROOT / ".claude/audit/guardrail-events.jsonl"
-    before = audit_file.read_text().count("\n") if audit_file.exists() else 0
+    env = {**os.environ, "CLAUDE_GUARDRAIL_AUDIT": "1", "CLAUDE_GUARDRAIL_AUDIT_DIR": str(tmp_path)}
     prompt = f"[sensitive-ok: customer {fake.ssn} parser test] SSN {fake.ssn}"
     subprocess.run([sys.executable, str(ROOT / ".claude/hooks/prompt_guard.py")], input=json.dumps({"prompt": prompt}), text=True, capture_output=True, env=env, check=True)
-    lines = audit_file.read_text().splitlines()
-    new = lines[before:]
-    try:
-        assert new and fake.ssn not in "\n".join(new)
-    finally:
-        audit_file.write_text("".join(line + "\n" for line in lines[:before]))
+    records = (tmp_path / "guardrail-events.jsonl").read_text()
+    assert "allow_with_ack" in records and fake.ssn not in records
 
 
 # --------------------------------------------------------------------------- #

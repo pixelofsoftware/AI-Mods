@@ -43,18 +43,30 @@ scripts/setup_guardrails.sh            # installs pre-commit hooks and runs a se
 # scripts/setup_guardrails.sh --with-sdk   # also installs the anthropic SDK (Part C)
 ```
 
-Expected end of output:
+Expected output on a machine with the sandbox dependencies installed:
 
 ```
+1. Prerequisites
+  ✔ python3 3.12.7
+  ✔ Claude Code 2.1.311 (Claude Code)
+  ✔ bwrap (sandbox dependency)
+  ✔ socat (sandbox dependency)
+2. Install
+  ✔ pre-commit hooks installed (pre-commit + pre-push)
+  ✔ local audit directory .claude/audit (gitignored)
 3. Self-test
   ✔ guardrail config matches config/claude-guardrails-policy.json
   ✔ bash_guard.py -> deny
   ✔ bash_guard.py -> deny
   ✔ file_guard.py -> ask
+  ✔ read_guard.py -> deny
   ✔ prompt_guard.py -> block
   ✔ bash_guard allows git status
-Guardrails ready (0 warning(s)).
+
+Guardrails ready (0 warning(s)). Next: start `claude` in this folder, trust it, then run /status, /hooks and /sandbox.
 ```
+
+The script exits non-zero if any step fails, including `pre-commit install`. To run the test suite as well: `python3 -m pip install pytest pyyaml && python3 -m pytest`.
 
 A warning about `bwrap`/`socat` means the OS sandbox is off. Install them before working on Tier 1–2 code.
 
@@ -88,7 +100,7 @@ claude
 
 | Ask Claude to… | Expected |
 |---|---|
-| "Run `curl https://example.com`" | Denied: *network egress tool blocked by AI policy* |
+| "Run `curl https://example.com`" | Denied by the `Bash(curl *)` permission rule. Variants such as `/usr/bin/curl` or `bash -c 'curl …'` are denied by the guard: *`curl` performs arbitrary network requests…* |
 | "Show me what's in `.env`" | Denied: secret file access |
 | "Add a tag to `infra/main.tf`" | Approval prompt: *infrastructure-as-code: … HITL* |
 | Paste a fake key such as `sk-ant-api03-` followed by 40 letters | Prompt blocked, redacted copy shown |
@@ -244,7 +256,7 @@ else:
 What happens on each call:
 
 1. All `system`, message text, `tool_result` and text-document content is redacted. The same value always gets the same placeholder within a request.
-2. If the highest finding is in `block_on` (default: CRITICAL, meaning credentials), the request is refused locally and never sent.
+2. If the highest finding is at or above `CLAUDE_SAFEGUARD_BLOCK_ON` (`Policy.block_min_severity`, default CRITICAL, meaning credentials), the request is refused locally and never sent.
 3. A hardening preamble and a random canary token are appended to the system prompt.
 4. The request goes to `claude-opus-5-5` (configurable) with server-side refusal fallback (`fallbacks="default"`).
 5. The response is validated: reverse shells, encoded execution, `rm -rf /`, credential exfiltration, markdown-image exfiltration and invisible Unicode are BLOCK; `curl | sh`, `chmod 777` and injection echoes are WARN. Leaked secrets and the canary also BLOCK.
