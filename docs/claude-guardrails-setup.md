@@ -140,7 +140,7 @@ Replace every `example.com` placeholder before rollout:
 | `enterprise/managed-settings.json` | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_RESOURCE_ATTRIBUTES`, `allowedMcpServers` URL patterns, `sandbox.network.allowedDomains` (your artifact proxy) |
 | `.mcp.json`, `config/claude-guardrails-policy.json` | Real MCP server URLs and the approved URL patterns |
 | `.claude/settings.json` | `sandbox.network.allowedDomains`, allow-list commands for your stacks |
-| `.github/CODEOWNERS` | Real GitHub team handles |
+| `.github/CODEOWNERS` | Already set to `@pixelofsoftware`; swap in GitHub teams if review should be shared |
 | `docs/claude-guardrails.md` | Slack channels, retention periods, owner names |
 
 ### B2. Deploy managed settings

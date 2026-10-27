@@ -1,33 +1,33 @@
 # Human-in-the-loop review for AI-assisted changes (docs/claude-guardrails.md §3).
 # Enable "Require review from Code Owners" in branch protection for this to block merges.
-# Replace the placeholder teams with real GitHub teams before enabling.
+# Owner: @pixelofsoftware. Swap in GitHub teams (e.g. @org/appsec, @org/platform-engineering) as the team grows.
 
 # Infrastructure-as-code and deployment config
-*.tf                          @your-org/platform-engineering
-*.tfvars                      @your-org/platform-engineering
-*.hcl                         @your-org/platform-engineering
-Dockerfile*                   @your-org/platform-engineering
-**/k8s/                       @your-org/platform-engineering
-**/helm/                      @your-org/platform-engineering
-.github/workflows/            @your-org/platform-engineering @your-org/appsec
+*.tf                          @pixelofsoftware
+*.tfvars                      @pixelofsoftware
+*.hcl                         @pixelofsoftware
+Dockerfile*                   @pixelofsoftware
+**/k8s/                       @pixelofsoftware
+**/helm/                      @pixelofsoftware
+.github/workflows/            @pixelofsoftware
 
 # Security-critical application code
-**/auth/                      @your-org/appsec
-**/security/                  @your-org/appsec
-**/crypto/                    @your-org/appsec
+**/auth/                      @pixelofsoftware
+**/security/                  @pixelofsoftware
+**/crypto/                    @pixelofsoftware
 
 # The AI guardrails themselves: loosening them needs AppSec sign-off
-.claude/                      @your-org/appsec
-.mcp.json                     @your-org/appsec
-CLAUDE.md                     @your-org/appsec
-.pre-commit-config.yaml       @your-org/appsec
-config/claude-guardrails-policy.json  @your-org/appsec
-scripts/claude_safeguard.py   @your-org/appsec
-scripts/precommit/            @your-org/appsec
-enterprise/                   @your-org/appsec @your-org/it-endpoint
-docs/claude-guardrails.md     @your-org/appsec
-docs/claude-guardrails-setup.md  @your-org/appsec
-scripts/setup_guardrails.sh   @your-org/appsec
-pyproject.toml                @your-org/appsec
-.gitignore                    @your-org/appsec
-.github/CODEOWNERS            @your-org/appsec
+.claude/                      @pixelofsoftware
+.mcp.json                     @pixelofsoftware
+CLAUDE.md                     @pixelofsoftware
+.pre-commit-config.yaml       @pixelofsoftware
+config/claude-guardrails-policy.json  @pixelofsoftware
+scripts/claude_safeguard.py   @pixelofsoftware
+scripts/precommit/            @pixelofsoftware
+enterprise/                   @pixelofsoftware
+docs/claude-guardrails.md     @pixelofsoftware
+docs/claude-guardrails-setup.md  @pixelofsoftware
+scripts/setup_guardrails.sh   @pixelofsoftware
+pyproject.toml                @pixelofsoftware
+.gitignore                    @pixelofsoftware
+.github/CODEOWNERS            @pixelofsoftware

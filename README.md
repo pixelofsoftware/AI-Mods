@@ -33,4 +33,4 @@ pre-commit run --all-files       # everything CI runs
 | `CLAUDE.md` | Standing instructions Claude reads in every session |
 | `.sdlc/claude-guardrails/` | Requirements, plan, reviews and verification record for this framework |
 
-Placeholders (`*.internal.example.com`, `@your-org/*` teams, Slack channels) must be replaced before rollout; see setup guide §B1.
+Placeholders (`*.internal.example.com`, Slack channels, the OTEL endpoint) must be replaced before rollout; see setup guide §B1.
