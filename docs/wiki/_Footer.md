@@ -1,0 +1,1 @@
+[Claude Guardrails](https://github.com/pixelofsoftware/AI-Mods) · MIT licensed · Generated from [`docs/wiki/`](https://github.com/pixelofsoftware/AI-Mods/tree/main/docs/wiki); edit there, not here · Report bypasses privately via [SECURITY.md](https://github.com/pixelofsoftware/AI-Mods/blob/main/SECURITY.md) · Not affiliated with Anthropic
