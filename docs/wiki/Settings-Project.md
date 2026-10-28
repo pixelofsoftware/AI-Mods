@@ -24,7 +24,10 @@ Legend used on this page: ⛔ Deny/Block · ✋ Ask · ⚠️ Warn · ✅ Allow.
 | `hooks` | object | Wires the four guardrail scripts | The hooks parse what permission rules can't | **Yes** |
 | `cleanupPeriodDays` | `14` | Local session transcripts older than 14 days are deleted ([policy §5](https://github.com/pixelofsoftware/AI-Mods/blob/main/docs/claude-guardrails.md#5-logging-and-monitoring)) | Data minimisation on the workstation | No. Managed settings set the same value org-wide |
 
-Keys that are **not** here on purpose: `env`, `apiKeyHelper`, `awsAuthRefresh`, `awsCredentialExport`, `otelHeadersHelper`, `statusLine` and `disableAllHooks`. The drift check fails if any of these keys appears, or if `env` sets a name that matches the forbidden patterns (for example `ANTHROPIC_*`, `*_BASE_URL` or a proxy). See [Policy baseline](Settings-Policy-Baseline#forbidden_settings_keys).
+Keys that are **not** here on purpose:
+
+- `apiKeyHelper`, `awsAuthRefresh`, `awsCredentialExport`, `otelHeadersHelper`, `statusLine` and `disableAllHooks`. The drift check fails if any of them appears. See [Policy baseline](Settings-Policy-Baseline#forbidden_settings_keys).
+- `env`. The project sets no environment variables. An `env` block is allowed, but the drift check fails on names that match the forbidden patterns (for example `ANTHROPIC_*`, `*_BASE_URL` or a proxy), and `OTEL_*` names are ignored by Claude Code here ([Organisation policy](Settings-Organisation-Policy)).
 
 ## `permissions` keys
 
@@ -194,9 +197,9 @@ How the hooks behave on errors:
 | Hook | On an internal error or a broken install |
 |---|---|
 | `bash_guard`, `file_guard`, `read_guard` | Fail closed: return ✋ ask with "manual review required" |
-| `prompt_guard` | Fails open, so a hook bug never loses your prompt, but shows a `systemMessage` saying prompts are **not** being checked |
+| `prompt_guard` | Fails open, so a hook bug never loses your prompt. It shows a `systemMessage` instead: `prompt_guard error: <type>`, or on a broken install a warning that prompts are **not** being checked |
 
-The hooks cap what they scan at 500,000 characters and send anything larger for review, so a huge payload can't push a hook past its timeout. The code comments note that a timed-out hook would fail open.
+The hooks also cap how much they analyse, so a huge payload can't push a hook past its timeout (the code comments note that a timed-out hook would fail open). `bash_guard` asks for commands over 100,000 characters, `file_guard` asks for new content over 500,000 characters, and `prompt_guard` scans only the head and tail of a prompt over 500,000 characters.
 
 ## `settings.local.json`: what developers can and can't change
 
@@ -211,7 +214,7 @@ The hooks cap what they scan at 500,000 characters and send anything larger for 
 | Keep personal preferences out of the shared file | Re-enable bypass mode when managed settings disable it ([setup guide B2](https://github.com/pixelofsoftware/AI-Mods/blob/main/docs/claude-guardrails-setup.md#b2-deploy-managed-settings)) |
 | | Commit the file: pre-commit and CI block it |
 
-The setup guide states the first two limits ([A5](https://github.com/pixelofsoftware/AI-Mods/blob/main/docs/claude-guardrails-setup.md#a5-day-to-day-use)). How Claude Code merges other keys from a local file (for example hooks or sandbox settings) is product behaviour; see the [Claude Code settings documentation](https://code.claude.com/docs/en/settings). If your organisation must stop developers from changing hooks or permission rules locally, use the managed options in [setup guide B5](https://github.com/pixelofsoftware/AI-Mods/blob/main/docs/claude-guardrails-setup.md#b5-optional-hardening) (`allowManagedHooksOnly`, `allowManagedPermissionRulesOnly`).
+The setup guide states these limits ([A5](https://github.com/pixelofsoftware/AI-Mods/blob/main/docs/claude-guardrails-setup.md#a5-day-to-day-use) and B2). How Claude Code merges other keys from a local file (for example hooks or sandbox settings) is product behaviour; see the [Claude Code settings documentation](https://code.claude.com/docs/en/settings). If your organisation must stop developers from changing hooks or permission rules locally, use the managed options in [setup guide B5](https://github.com/pixelofsoftware/AI-Mods/blob/main/docs/claude-guardrails-setup.md#b5-optional-hardening) (`allowManagedHooksOnly`, `allowManagedPermissionRulesOnly`).
 
 If a shared rule gets in your way, don't work around it locally. Open an `ai-guardrails` issue ([False positives and exceptions](Use-Case-False-Positives-and-Exceptions)).
 
