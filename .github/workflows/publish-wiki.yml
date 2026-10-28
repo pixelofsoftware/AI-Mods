@@ -1,0 +1,48 @@
+# Publishes docs/wiki/ to the GitHub wiki after it changes on main.
+# Only this job can write to the repository, and only runs for pushes to main
+# (never for pull requests), so unreviewed changes can't reach the wiki.
+name: publish-wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/wiki/**"
+      - "scripts/publish_wiki.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push to the <repo>.wiki.git repository
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Publish wiki
+        env:
+          # GITHUB_TOKEN by default; set a WIKI_TOKEN secret (fine-grained PAT,
+          # Contents: read and write on this repository) if GitHub rejects it.
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN || github.token }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          # Pass the credential through the environment, not argv or a config file.
+          auth="$(printf 'x-access-token:%s' "$WIKI_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          bash scripts/publish_wiki.sh
