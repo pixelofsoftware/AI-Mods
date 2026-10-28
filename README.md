@@ -400,6 +400,7 @@ Parses real shell syntax: pipelines, `;`/`&&` chains, subshells, `$(…)` and ba
 | `git_history_rewrite` / `git_destructive` | `rebase`, `commit --amend`, `filter-branch`, `reset --hard`, `clean -f`, `branch -D` |
 | `git_force_push` | `--force-with-lease` |
 | `git_config_tamper` | git config changes touching credentials or global state |
+| `git_alias_exec` | git aliases that run a shell command (⛔ denied if they invoke a network tool) |
 | `guardrail_change` | Shell writes to guardrail files: redirects, `tee`, `cp`/`mv`, `sed -i`, `truncate` |
 | `dns_query` | `dig`, `nslookup`, `host`, `drill` (DNS exfiltration) |
 | `inline_network_code` | Network code in `python -c`, `node -e` or an interpreter heredoc; `python -m http.server` |
