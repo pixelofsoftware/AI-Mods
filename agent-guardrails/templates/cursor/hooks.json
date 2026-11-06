@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 .agent-guardrails/hook.py cursor prompt",
+        "timeout": 15
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python3 .agent-guardrails/hook.py cursor bash",
+        "timeout": 15,
+        "failClosed": true
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "python3 .agent-guardrails/hook.py cursor read",
+        "timeout": 15,
+        "failClosed": true
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 .agent-guardrails/hook.py cursor tool",
+        "matcher": "Write|Edit|MultiEdit|Delete|Grep|Glob",
+        "timeout": 15,
+        "failClosed": true
+      }
+    ]
+  }
+}

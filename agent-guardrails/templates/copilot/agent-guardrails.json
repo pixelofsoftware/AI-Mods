@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 .agent-guardrails/hook.py copilot tool",
+        "powershell": "python .agent-guardrails/hook.py copilot tool",
+        "cwd": ".",
+        "timeoutSec": 30
+      }
+    ],
+    "userPromptTransformed": [
+      {
+        "type": "command",
+        "bash": "python3 .agent-guardrails/hook.py copilot prompt",
+        "powershell": "python .agent-guardrails/hook.py copilot prompt",
+        "cwd": ".",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

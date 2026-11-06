@@ -1,0 +1,15 @@
+{
+  "name": "agent-guardrails",
+  "description": "Security guardrails for AI coding agents: hooks that block secret access, network egress and risky infrastructure commands, plus a skill that teaches the agent the policy.",
+  "owner": {
+    "name": "pixelofsoftware",
+    "url": "https://github.com/pixelofsoftware"
+  },
+  "plugins": [
+    {
+      "name": "agent-guardrails",
+      "source": "./",
+      "description": "Security guardrails for AI coding agents (hooks + skill)."
+    }
+  ]
+}

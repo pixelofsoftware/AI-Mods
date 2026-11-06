@@ -1,0 +1,20 @@
+{
+  "name": "agent-guardrails",
+  "version": "0.1.0",
+  "description": "Security guardrails for AI coding agents: blocks secret access, network egress, risky infrastructure commands and credential leaks in prompts; asks a human before infrastructure, security-critical or guardrail changes.",
+  "author": {
+    "name": "Marcin Kowalczyk",
+    "url": "https://github.com/pixelofsoftware"
+  },
+  "homepage": "https://github.com/pixelofsoftware/AI-Mods/tree/main/agent-guardrails",
+  "repository": "https://github.com/pixelofsoftware/AI-Mods",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "guardrails",
+    "secrets",
+    "pii",
+    "devsecops"
+  ],
+  "icon": ".claude-plugin/icon.png"
+}
