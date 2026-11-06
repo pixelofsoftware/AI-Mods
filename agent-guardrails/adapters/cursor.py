@@ -18,12 +18,12 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
-from guardrails_core import evaluate_prompt, evaluate_read, evaluate_shell, evaluate_write
+from guardrails_core import evaluate_prompt, evaluate_read, evaluate_shell
 from guardrails_core.common import audit, fingerprint, project_dir
 from guardrails_core.shell import evaluate_powershell
 from guardrails_core.verdict import Verdict
 
-from . import as_object, emit, first_path, joined_content, read_event
+from . import as_object, emit, evaluate_write_args, read_event, read_targets
 
 HOST = "cursor"
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "Delete"}
@@ -44,18 +44,24 @@ def _message(reason: str) -> Dict[str, str]:
     return {"user_message": text, "agent_message": text}
 
 
-def _no_ask(decision: Optional[str]) -> Optional[str]:
+# Asks that AGENT_GUARDRAILS_CURSOR_ASK=allow may let through: changes that need a
+# reviewer. Likely secrets, oversized content and unknown targets stay denied.
+REVIEW_RULES = {"guardrail_change", "iac_change", "security_critical_change", "web_fetch"}
+
+
+def _no_ask(verdict: Verdict) -> Optional[str]:
     """Map "ask" for events where Cursor cannot ask a human."""
-    if decision != "ask":
-        return decision
-    return "allow" if os.environ.get("AGENT_GUARDRAILS_CURSOR_ASK") == "allow" else "deny"
+    if verdict.decision != "ask":
+        return verdict.decision
+    reviewable = set(verdict.rules) <= REVIEW_RULES
+    return "allow" if reviewable and os.environ.get("AGENT_GUARDRAILS_CURSOR_ASK") == "allow" else "deny"
 
 
 def _answer(event: Dict[str, Any], guard: str, verdict: Verdict, can_ask: bool, extra: Optional[Dict[str, Any]] = None) -> None:
     if not verdict.decision:
         emit({"permission": "allow"})
         return
-    decision = verdict.decision if can_ask else _no_ask(verdict.decision)
+    decision = verdict.decision if can_ask else _no_ask(verdict)
     record = dict(verdict.audit, **(extra or {}))
     if decision != verdict.decision:
         record["mapped_from"] = verdict.decision
@@ -85,17 +91,13 @@ def tool(event: Dict[str, Any]) -> None:
     name = event.get("tool_name") or ""
     args = as_object(event.get("tool_input"))
     if name in WRITE_TOOLS:
-        path = first_path(args)
-        if not path:
-            verdict = Verdict("ask", f"{name}: could not determine the target file; manual review required", ["unknown_target"])
-        else:
-            verdict = evaluate_write(path, joined_content(args), _root(event))
-        _answer(event, "file_guard", verdict, can_ask=False)
+        _answer(event, "file_guard", evaluate_write_args(name, args, _root(event)), can_ask=False)
     elif name in READ_TOOLS:
-        targets = [args[k] for k in ("path", "file_path", "glob", "target_directory", "include", "pattern") if isinstance(args.get(k), str) and args[k]]
-        if name == "Grep":  # for Grep the pattern is a regex, not a path
-            targets = [args[k] for k in ("path", "file_path", "glob", "target_directory", "include") if isinstance(args.get(k), str) and args[k]]
-        _answer(event, "read_guard", evaluate_read(targets), can_ask=False)
+        _answer(event, "read_guard", evaluate_read(read_targets(args, include_pattern=name == "Glob")), can_ask=False)
+    elif name == "WebSearch":  # same as the deny rule in .claude/settings.json
+        _answer(event, "tool_policy", Verdict("deny", "web search is disabled by policy", ["web_search"]), can_ask=False)
+    elif name == "WebFetch":  # same as the ask rule in .claude/settings.json
+        _answer(event, "tool_policy", Verdict("ask", "fetching a web page needs approval", ["web_fetch"]), can_ask=False)
     else:
         emit({"permission": "allow"})
 

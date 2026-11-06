@@ -13,17 +13,19 @@ values redacted. In the cloud agent "ask" is treated as "deny" by Copilot itself
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict
 
-from guardrails_core import evaluate_prompt, evaluate_read, evaluate_shell, evaluate_write
+from guardrails_core import evaluate_prompt, evaluate_read, evaluate_shell
 from guardrails_core.common import audit, fingerprint, project_dir
 from guardrails_core.shell import evaluate_powershell
 from guardrails_core.verdict import Verdict
 
-from . import as_object, emit, first_path, joined_content, patch_files, read_event
+from . import as_object, emit, evaluate_write_args, read_event, read_targets, worst
 
 HOST = "copilot"
 SHELL_TOOLS = {"bash", "powershell", "Bash"}
+SHELL_INPUT_TOOLS = {"write_bash", "write_powershell"}  # keystrokes sent to a background shell
 READ_TOOLS = {"view", "grep", "rg", "glob", "Read", "Grep", "Glob"}
 WRITE_TOOLS = {"create", "edit", "str_replace_editor", "apply_patch", "Write", "Edit"}
 REDACTION_NOTE = "[AI guardrail: sensitive values in this message were redacted before it reached the model]\n\n"
@@ -48,40 +50,25 @@ def _answer(event: Dict[str, Any], guard: str, name: str, verdict: Verdict, extr
     emit({"permissionDecision": verdict.decision, "permissionDecisionReason": f"[AI guardrail] {verdict.reason}"})
 
 
-def _worst(verdicts: List[Verdict]) -> Verdict:
-    for level in ("deny", "ask"):
-        for verdict in verdicts:
-            if verdict.decision == level:
-                return verdict
-    return Verdict()
-
-
 def tool(event: Dict[str, Any]) -> None:
     name, args = _fields(event)
     root = project_dir(event.get("cwd"))
-    if name in SHELL_TOOLS:
-        command = args.get("command") if isinstance(args.get("command"), str) else ""
-        evaluate = evaluate_powershell if name == "powershell" else evaluate_shell
+    if name in SHELL_TOOLS or name in SHELL_INPUT_TOOLS:
+        key = "input" if name in SHELL_INPUT_TOOLS else "command"
+        command = args.get(key) if isinstance(args.get(key), str) else ""
+        command = command.replace("{enter}", "\n")
+        # PascalCase payloads report powershell as "Bash"; on Windows treat it as PowerShell.
+        powershell = name in {"powershell", "write_powershell"} or (name == "Bash" and os.name == "nt")
+        evaluate = evaluate_powershell if powershell else evaluate_shell
         _answer(event, "bash_guard", name, evaluate(command), {"command_fp": fingerprint(command)})
     elif name in READ_TOOLS or (name == "str_replace_editor" and args.get("command") == "view"):
-        keys = ["path", "file_path", "glob"] + (["pattern"] if name in {"glob", "Glob"} else [])
-        targets = [args[k] for k in keys if isinstance(args.get(k), str) and args[k]]
-        _answer(event, "read_guard", name, evaluate_read(targets))
+        _answer(event, "read_guard", name, evaluate_read(read_targets(args, include_pattern=name in {"glob", "Glob"})))
     elif name in WRITE_TOOLS:
-        patch = next((args[k] for k in ("patch", "input") if isinstance(args.get(k), str)), "")
-        if name == "apply_patch" or (patch and "*** " in patch):
-            files = patch_files(patch)
-            if not files:
-                verdict = Verdict("ask", f"{name}: could not determine the files this patch changes; manual review required", ["unknown_target"])
-            else:
-                verdict = _worst([evaluate_write(path, content, root) for path, content in files.items()])
-        else:
-            path = first_path(args)
-            if not path:
-                verdict = Verdict("ask", f"{name}: could not determine the target file; manual review required", ["unknown_target"])
-            else:
-                verdict = evaluate_write(path, joined_content(args), root)
-        _answer(event, "file_guard", name, verdict)
+        _answer(event, "file_guard", name, evaluate_write_args(name, args, root))
+    elif name in {"web_search", "WebSearch"}:  # same as the deny rule in .claude/settings.json
+        _answer(event, "tool_policy", name, Verdict("deny", "web search is disabled by policy", ["web_search"]))
+    elif name in {"web_fetch", "WebFetch"}:  # same as the ask rule in .claude/settings.json
+        _answer(event, "tool_policy", name, Verdict("ask", "fetching a web page needs approval", ["web_fetch"]))
     else:
         emit({})
 

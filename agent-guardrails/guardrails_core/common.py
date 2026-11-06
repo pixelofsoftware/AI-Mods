@@ -25,7 +25,15 @@ def project_dir(event_cwd: Optional[str] = None) -> Path:
     for var in PROJECT_ENV_VARS:
         if os.environ.get(var):
             return Path(os.environ[var]).resolve()
-    return Path(event_cwd or os.getcwd()).resolve()
+    # No variable (Copilot): use the enclosing repository, never a subfolder the
+    # session happens to run in, or the path patterns would lose their prefixes.
+    for start in (event_cwd, os.getcwd()):
+        if start:
+            folder = Path(start).resolve()
+            for candidate in (folder, *folder.parents):
+                if (candidate / ".git").exists():
+                    return candidate
+    return Path(os.getcwd()).resolve()
 
 
 def relative(path: str, root: Path) -> str:
@@ -85,13 +93,18 @@ GUARDRAIL_PATH_RE = re.compile(
   | (?:^|/)pyproject\.toml$
   | (?:^|/)\.gitignore$
   | (?:^|/)\.agent-guardrails/
-  | (?:^|/)\.cursor/(?:hooks\.json$|hooks/|rules/|skills/agent-guardrails/)
-  | (?:^|/)\.github/(?:hooks/|skills/agent-guardrails/|copilot/settings)
+  | (?:^|/)\.cursor/
+  | (?:^|/)\.cursorrules$
+  | (?:^|/)\.github/(?:hooks|skills|copilot|instructions|agents|prompts)/
   | (?:^|/)\.github/copilot-instructions\.md$
+  | (?:^|/)\.copilot/
+  | (?:^|/)\.vscode/(?:mcp|settings)\.json$
+  | (?:^|/)AGENTS\.md$
     """
 )
-# The last four lines are additions for the Cursor and Copilot packages: their
-# hook configuration and this runtime need the same protection as .claude/.
+# The lines from .agent-guardrails/ on are additions for Cursor and Copilot: their
+# hooks, MCP servers, rules, skills, agent instructions and settings (where auto-approval
+# and hook switches live) need the same protection as .claude/, .mcp.json and CLAUDE.md.
 
 # Globs that expand to secrets files: `.env*`, `.env.{prod,local}`, `*.pem`.
 ENV_GLOB_RE = re.compile(r"(?:^|/)\.env[^/]*[*?\[{]|(?:^|/)\*\.(?:pem|key|p12|pfx)$")

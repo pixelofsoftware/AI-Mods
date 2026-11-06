@@ -24,7 +24,7 @@
     "preToolUse": [
       {
         "command": "python3 .agent-guardrails/hook.py cursor tool",
-        "matcher": "Write|Edit|MultiEdit|Delete|Grep|Glob",
+        "matcher": "Write|Edit|MultiEdit|Delete|Grep|Glob|WebFetch|WebSearch",
         "timeout": 15,
         "failClosed": true
       }

@@ -37,7 +37,20 @@ class Plan:
         self.dry_run = dry_run
         self.changes: List[str] = []
 
+    def check_dest(self, dest: Path) -> None:
+        """Refuse to write through a symlink or outside the project (a hostile clone
+        could point a destination at a file elsewhere on the machine)."""
+        rel = dest.relative_to(self.project)
+        current = self.project
+        for part in rel.parts:
+            current = current / part
+            if current.is_symlink():
+                raise SystemExit(f"error: {current} is a symlink; refusing to install through it")
+        if not dest.resolve().is_relative_to(self.project.resolve()):
+            raise SystemExit(f"error: {dest} resolves outside the project")
+
     def copy_tree(self, src: Path, dest: Path) -> None:
+        self.check_dest(dest)
         self.changes.append(f"copy  {src.relative_to(HERE)} -> {dest.relative_to(self.project)}")
         if self.dry_run:
             return
@@ -50,6 +63,7 @@ class Plan:
             shutil.copy2(src, dest)
 
     def write_json(self, dest: Path, data: Dict[str, Any], verb: str) -> None:
+        self.check_dest(dest)
         self.changes.append(f"{verb:5} {dest.relative_to(self.project)}")
         if self.dry_run:
             return
@@ -111,8 +125,13 @@ def install_cursor(plan: Plan) -> None:
     for event, entries in template("cursor", "hooks.json")["hooks"].items():
         current = hooks.setdefault(event, [])
         for entry in entries:
-            if not any(e.get("command") == entry["command"] for e in current if isinstance(e, dict)):
-                current.append(entry)
+            same_command = [e for e in current if isinstance(e, dict) and e.get("command") == entry["command"]]
+            if entry in same_command:
+                continue
+            for stale in same_command:  # a weakened copy (other matcher, no failClosed): replace it
+                plan.changes.append(f"fix   .cursor/hooks.json {event}: replaced a modified agent-guardrails entry")
+                current.remove(stale)
+            current.append(entry)
     plan.write_json(path, config, "merge" if path.exists() else "write")
 
 
@@ -138,11 +157,19 @@ def main(argv: List[str] = None) -> int:
         parser.error("install into a project, not into the agent-guardrails source folder")
 
     hosts = list(INSTALLERS) if args.target == "all" else [args.target]
-    plan = Plan(project, args.dry_run)
-    install_runtime(plan)
-    for host in hosts:
-        install_skill(plan, host)
-        INSTALLERS[host](plan)
+
+    def apply(dry_run: bool) -> Plan:
+        plan = Plan(project, dry_run)
+        install_runtime(plan)
+        for host in hosts:
+            install_skill(plan, host)
+            INSTALLERS[host](plan)
+        return plan
+
+    # Check every destination first, so an unsafe one stops the install before anything is written.
+    plan = apply(dry_run=True)
+    if not args.dry_run:
+        plan = apply(dry_run=False)
 
     print(("Planned changes" if args.dry_run else "Installed") + f" in {project}:")
     for change in plan.changes:

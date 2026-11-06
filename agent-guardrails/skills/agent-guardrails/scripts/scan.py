@@ -23,10 +23,12 @@ def find_engine() -> Path:
         candidates.append(Path(os.environ["AGENT_GUARDRAILS_HOME"]))
     if os.environ.get("CLAUDE_PLUGIN_ROOT"):
         candidates.append(Path(os.environ["CLAUDE_PLUGIN_ROOT"]))
-    candidates.append(HERE.parents[2])  # <root>/skills/agent-guardrails/scripts -> <root>
-    for start in (Path.cwd(), HERE):
-        for folder in (start, *start.parents):
-            candidates.append(folder / ".agent-guardrails")
+    candidates.append(HERE.parents[2])  # plugin: <root>/skills/agent-guardrails/scripts -> <root>
+    # Project install: <repo>/.<tool>/skills/agent-guardrails/scripts -> <repo>/.agent-guardrails.
+    # Only folders above this script are searched, never the current directory, so
+    # scanning inside an untrusted checkout can't load that checkout's code.
+    for folder in HERE.parents:
+        candidates.append(folder / ".agent-guardrails")
     for candidate in candidates:
         if (candidate / "guardrails_core" / "safeguard.py").is_file():
             return candidate

@@ -52,7 +52,7 @@ The installer:
 2. **Copies the skill** to `.claude/skills/`, `.cursor/skills/` or `.github/skills/`.
 3. **Adds the hook configuration** to `.claude/settings.json`, `.cursor/hooks.json` or `.github/hooks/agent-guardrails.json`, merging with what is already there.
 
-It only adds restrictive settings: hooks, deny and ask rules, the bypass lock, and the sandbox when none is set. It never adds allow rules or removes anything. Running it twice changes nothing. Commit the result so the whole team gets it.
+It refuses to write through a symlink or outside the project, and checks every destination before writing anything. It only adds restrictive settings: hooks, deny and ask rules, the bypass lock, and the sandbox when none is set. It never adds allow rules or removes anything. Running it twice changes nothing. Commit the result so the whole team gets it.
 
 ## Enforce it across an organisation
 
@@ -90,7 +90,7 @@ agent-guardrails/
 - **End to end.** For about 130 events across all four guards, including malformed input, `hook.py` gives the same stdout and exit code as the original scripts.
 - **Not vacuous.** It also checks that the comparison really covered deny, ask, block, notice and allow results.
 
-The Cursor and Copilot adapters reuse that engine, so their decisions are the same. Only the output format differs. Their tests cover each documented event and the cases where a tool can't express a decision.
+The Cursor and Copilot adapters reuse that engine, so their decisions are the same. Only the output format differs. Their tests cover each documented event and the cases where a tool can't express a decision. `tests/test_review_findings.py` holds a regression test for each finding of an independent adversarial review (decoy arguments, unknown fields, subfolder sessions, symlinks and others).
 
 ```bash
 cd agent-guardrails && python3 -m pytest
@@ -98,14 +98,16 @@ cd agent-guardrails && python3 -m pytest
 
 ## Limitations
 
-- **Cursor can't ask before a file write.** Its `preToolUse` hook ignores "ask", so a write that needs human review (infrastructure, auth, the guardrails) is **denied**, with a message telling the user to make or approve the change themselves. Set `AGENT_GUARDRAILS_CURSOR_ASK=allow` to let such writes through instead (they are still audited). Secret files and hardcoded keys stay denied either way.
+- **Cursor can't ask before a file write.** Its `preToolUse` hook ignores "ask", so a write that needs human review (infrastructure, auth, the guardrails) is **denied**, with a message telling the user to make or approve the change themselves. Set `AGENT_GUARDRAILS_CURSOR_ASK=allow` to let such review-only writes through instead (they are still audited). Secret files, hardcoded keys, likely personal data, oversized content and writes whose target can't be determined stay denied either way.
 - **Cursor and Copilot don't show non-blocking prompt notices.** Personal-data notices and prompt-injection warnings are only written to the audit log.
 - **Copilot can't block a prompt.** The prompt guard rewrites what the model receives (`userPromptTransformed`), replacing blocked values with placeholders. GitHub documents output for this event, but it hasn't been verified in a live session.
 - **Copilot hook timeouts fail open**, by Copilot's design. The hooks are given 30 seconds and usually finish in well under one.
-- **Tool argument names** for Cursor's `Write` and Copilot's editing tools aren't fully documented. The adapters accept the common field names. When they can't find a target file, they deny or ask rather than allow.
+- **Tool argument names** for Cursor's `Write` and Copilot's editing tools aren't fully documented. So the adapters check **every** path field and every patch in a tool call, scan **every** text value for credentials, and take the strictest result. A decoy field can't hide the real target. When no target file can be found, they deny or ask rather than allow.
+- **Tools the adapters don't recognise**, such as MCP tools, are left to the tool's own permission flow, as the original hooks leave them to Claude Code's permission rules. Keystrokes sent to a Copilot background shell (`write_bash`, `write_powershell`) go through the shell guard. Web search is denied and web fetch asks, matching `.claude/settings.json`.
+- **Project root.** Copilot sets no project variable, so the adapters use the enclosing git repository. A session running in a subfolder therefore can't weaken path rules such as `.github/workflows/`.
 - **Windows:** the Cursor template calls `python3`. If that isn't on the PATH, change it to `python` or `py -3`. The Copilot template already uses `python` for PowerShell.
 - **Policy links** in messages point to `docs/claude-guardrails.md`, as in the original. The skill ships that policy as `references/policy.md`.
-- **Extra protection.** Compared with the original, the engine also asks before changes to `.agent-guardrails/`, `.cursor/hooks.json`, `.cursor/rules/`, `.github/hooks/` and the installed skill folders. In PowerShell it also checks commands as if launched through `pwsh -Command`, so `iwr … | iex` is caught.
+- **Extra protection.** Compared with the original, the engine also asks before changes to the new tools' equivalents of `.claude/`, `.mcp.json` and `CLAUDE.md`. That covers `.agent-guardrails/`, `.cursor/`, `.cursorrules`, `.github/hooks/`, `skills/`, `copilot/`, `instructions/`, `agents/` and `prompts/`, `.github/copilot-instructions.md`, `~/.copilot/`, `.vscode/mcp.json`, `.vscode/settings.json` and `AGENTS.md`. In PowerShell it also checks commands as if launched through `pwsh -Command`, so `iwr … | iex` is caught.
 - Everything in the main [Honest limitations](../README.md#%EF%B8%8F-honest-limitations) section still applies. Detection is pattern-based.
 
 ## Verify in your tool

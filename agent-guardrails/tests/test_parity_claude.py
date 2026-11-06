@@ -37,7 +37,8 @@ original_bash = _load_original_bash_guard()
 
 # Paths the portable package additionally protects (Cursor/Copilot config). The
 # original has no rule for them, so they are excluded from the parity corpus.
-EXTENSION_MARKERS = (".agent-guardrails", ".cursor/", ".github/hooks", ".github/skills", ".github/copilot")
+EXTENSION_MARKERS = (".agent-guardrails", ".cursor", ".github/hooks", ".github/skills", ".github/copilot", ".github/instructions",
+                     ".github/agents", ".github/prompts", ".copilot/", ".vscode/", "AGENTS.md")
 
 
 def _repo_test_strings():
