@@ -11,7 +11,7 @@ import os
 import re
 import shlex
 from dataclasses import dataclass, field
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from .common import GUARDRAIL_PATH_RE, looks_secret
 from .verdict import Verdict
@@ -298,10 +298,93 @@ def _path_candidates(arg: str) -> List[str]:
 
 def _secret_reference(args: Iterable[str]) -> Optional[str]:
     for a in args:
-        for cand in _path_candidates(a):
-            if looks_secret(cand):
-                return cand
+        for expanded in _expand(a)[0]:  # `f=.env; cat $f` must look like `cat .env`
+            for cand in _path_candidates(expanded):
+                if looks_secret(cand):
+                    return cand
     return None
+
+# --------------------------------------------------------------------------- #
+# Shell variables
+# --------------------------------------------------------------------------- #
+
+# Commands that read file contents. When one of them gets a path built from a
+# value the guard cannot resolve, the path may name a secrets file: ask.
+CONTENT_READERS = {
+    "cat", "tac", "less", "more", "head", "tail", "nl", "od", "xxd", "hexdump", "strings", "base64", "base32",
+    "cp", "mv", "install", "rsync", "scp", "dd", "grep", "egrep", "fgrep", "rg", "ag", "awk", "gawk", "sed", "cut",
+    "sort", "uniq", "diff", "cmp", "comm", "paste", "jq", "yq", "openssl", "gpg", "zip", "tar", "gzip", "bzip2",
+    "xz", "zcat", "vi", "vim", "nvim", "nano", "emacs", "source", ".",
+}
+# Well-known variables, expanded so `$HOME/.ssh/id_rsa` is recognised.
+KNOWN_VARS = {"HOME": "~", "PWD": ".", "OLDPWD": ".", "TMPDIR": "/tmp", "TMP": "/tmp"}  # nosec B108 - values only matched against path patterns; nothing is written there
+MAX_EXPANSIONS = 64
+ASSIGNMENT_RE = re.compile(
+    r"""(?:^|[\s;&|(`])(?:(?:export|declare|typeset|local|readonly)\s+(?:-\w{1,8}\s+){0,4})?"""
+    r"""([A-Za-z_]\w{0,63})(?:\[[^\]\s]{0,64}\])?\+?="""
+    r"""(?:"([^"]{0,4096})"|'([^']{0,4096})'|\(([^)]{0,4096})\)|([^\s;&|)`]{0,4096}))"""
+)
+FOR_RE = re.compile(r"(?:^|[\s;&|(])for\s+([A-Za-z_]\w{0,63})\s+in\s+([^;\n]{0,4096})")
+VAR_REF_RE = re.compile(
+    r"\$(?:\{!?([A-Za-z_]\w{0,63}|[0-9@*#?])(?:\[[^\]]{0,64}\])?(?:(:?[-=+?]|##?|%%?|/{1,2})([^}]{0,1024}))?\}"
+    r"|([A-Za-z_]\w{0,63}|[0-9@*#?]))"
+)
+SUBST_RE = re.compile(r"\$\(([^()]{0,4096})\)|`([^`]{0,4096})`")
+
+_ASSIGNED: List[Dict[str, Set[str]]] = []  # assignments seen in the command(s) being analysed
+
+
+def _assignments(command: str) -> Dict[str, Set[str]]:
+    """Values the command assigns to shell variables: `f=.env`, `export F=...`,
+    prefix assignments, arrays `a=(x y)` and `for f in x y`."""
+    found: Dict[str, Set[str]] = {}
+    for m in ASSIGNMENT_RE.finditer(command):
+        value = next((g for g in m.groups()[1:] if g is not None), "")
+        words = value.split() if m.group(4) is not None else [value]
+        found.setdefault(m.group(1), set()).update(w.strip("'\"") for w in words)
+    for m in FOR_RE.finditer(command):
+        found.setdefault(m.group(1), set()).update(w.strip("'\"") for w in m.group(2).split())
+    return found
+
+
+def _expand(arg: str, _depth: int = 0) -> Tuple[List[str], List[str]]:
+    """The values one argument may take, and the references with no known value.
+
+    `$f` and `${f}` take the values assigned in this command; `${f:-x}`, `${f-x}`,
+    `${f:=x}` and `${f:+x}` may also take `x`; `$HOME` becomes `~`. A reference with
+    no known value is kept as unresolved and also expanded to an empty string, so
+    `$DIR/.env` still yields `/.env`. Words inside `$(...)` are candidates too."""
+    if "$" not in arg and "`" not in arg:
+        return [arg], []
+    assigned = _ASSIGNED[-1] if _ASSIGNED else {}
+    candidates = [""]
+    unresolved: List[str] = []
+    pos = 0
+    for m in VAR_REF_RE.finditer(arg):
+        name = m.group(1) or m.group(4)
+        op, word = m.group(2), m.group(3)
+        values = set(assigned.get(name, ()))
+        if name in KNOWN_VARS:
+            values.add(KNOWN_VARS[name])
+        if op in {"-", ":-", "=", ":=", "+", ":+"} and word:
+            values.add(word.strip("'\""))
+        if not values:
+            unresolved.append(m.group(0))
+            values = {""}
+        prefix = arg[pos:m.start()]
+        candidates = [c + prefix + value for c in candidates for value in sorted(values)][:MAX_EXPANSIONS]
+        pos = m.end()
+    candidates = [c + arg[pos:] for c in candidates]
+    for m in SUBST_RE.finditer(arg):
+        unresolved.append(m.group(0))
+        candidates += [w.strip("'\"") for w in (m.group(1) or m.group(2) or "").split()]
+    if _depth < 3:  # nested references: `${x:-${y:-.env}}` leaves `${y:-.env}` after one pass
+        for cand in list(candidates):
+            if cand != arg and ("$" in cand or "`" in cand):
+                more, refs = _expand(cand, _depth + 1)
+                candidates += more
+                unresolved += refs
+    return list(dict.fromkeys([arg] + candidates))[: MAX_EXPANSIONS * 4], unresolved
 
 
 def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[str], depth: int, raw_command: str) -> Decision:
@@ -406,6 +489,10 @@ def check_segment(prev_sep: Optional[str], raw_argv: List[str], prev_argv: List[
     hit = _secret_reference(secret_args) if check_secrets else None
     if hit:
         v.add("deny", "secret_file_access", f"access to secret material `{os.path.basename(hit) or hit}` is blocked; reference it via env vars or a secret manager")
+    elif check_secrets and cmd in CONTENT_READERS:
+        unresolved = [ref for a in secret_args for ref in _expand(a)[1]]
+        if unresolved:
+            v.add("ask", "unresolved_variable", f"`{cmd}` reads a path built from a shell value the guard cannot resolve (`{unresolved[0]}`); it may name a secrets file")
     if cmd in {"source", "."} and args and _secret_reference(args[:1]):
         v.add("deny", "secret_file_access", "sourcing a secrets file into the agent shell")
     if (
@@ -548,6 +635,20 @@ def _substitutions(text: str, depth: int) -> Decision:
 
 
 def analyze(command: str, depth: int = 0) -> Decision:
+    """Analyse a command, with the variables it assigns (plus those of any enclosing
+    command, for `$(...)`, `bash -c` and heredoc bodies) available for expansion."""
+    scope = {name: set(values) for name, values in (_ASSIGNED[-1] if _ASSIGNED else {}).items()}
+    own = _assignments(command) if len(command) <= MAX_COMMAND_CHARS else {}  # oversized input is rejected below
+    for name, values in own.items():
+        scope.setdefault(name, set()).update(values)
+    _ASSIGNED.append(scope)
+    try:
+        return _analyze(command, depth)
+    finally:
+        _ASSIGNED.pop()
+
+
+def _analyze(command: str, depth: int) -> Decision:
     v = Decision()
     if len(command) > MAX_COMMAND_CHARS:
         v.add("ask", "oversized", "command too large to analyse")
