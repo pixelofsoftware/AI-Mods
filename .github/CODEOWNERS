@@ -31,3 +31,6 @@ scripts/setup_guardrails.sh   @pixelofsoftware
 pyproject.toml                @pixelofsoftware
 .gitignore                    @pixelofsoftware
 .github/CODEOWNERS            @pixelofsoftware
+
+# Plugin marketplace: decides what users install with /plugin marketplace add
+.claude-plugin/                @pixelofsoftware
