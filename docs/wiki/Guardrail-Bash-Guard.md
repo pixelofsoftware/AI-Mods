@@ -6,7 +6,7 @@ The Bash guard inspects every shell command Claude wants to run and denies, or s
 |---|---|
 | **Runs on** | `PreToolUse` for the `Bash` and `Monitor` tools (matcher `Bash\|Monitor` in `.claude/settings.json`, 15 s timeout) |
 | **Decides** | ⛔ Deny, ✋ Ask, or no output (✅ the normal permission rules in `.claude/settings.json` apply) |
-| **Rules** | 33 rule names, listed in [Rule reference](#rule-reference) |
+| **Rules** | 34 rule names, listed in [Rule reference](#rule-reference) |
 | **Can't analyse it?** | ✋ Ask (or ⛔ Deny if a network client is mentioned) |
 | **Fails** | **Closed**: a crash or a broken install answers ✋ Ask, never allow |
 | **Audit** | One metadata-only line per deny or ask in `.claude/audit/guardrail-events.jsonl` |
@@ -214,6 +214,7 @@ Every rule name below appears in the audit log's `rules` field. Several rules ha
 | | [`secret_echo`](#secret_echo) | ⛔ |
 | | [`secret_store_read`](#secret_store_read) | ⛔ |
 | | [`secret_search`](#secret_search) | ✋ |
+| | [`unresolved_variable`](#unresolved_variable) | ✋ |
 | Guardrails | [`guardrail_change`](#guardrail_change) | ✋ |
 | | [`guardrail_bypass`](#guardrail_bypass) | ⛔ |
 | Git | [`git_alias_exec`](#git_alias_exec) | ⛔ / ✋ |
@@ -373,6 +374,16 @@ sudo apt-get install jq     ⛔ privilege escalation (sudo/su/doas) is not permi
 
 Each argument is also checked after `:` and after `=`, so `git show HEAD:.env` and `--file=.env` are caught. Heredoc and here-string markers are not treated as paths.
 
+**Shell variables are expanded first.** Before the check, each argument takes every value the command itself gives its variables:
+
+- assignments (`f=.env`, `export F=…`, `declare`, `local`, the `F=… cmd` prefix form), arrays (`a=(.env x)`) and `for f in …` lists, including those of an enclosing command for `$(…)`, `bash -c` and heredoc bodies;
+- defaults and alternatives in `${F:-x}`, `${F-x}`, `${F:=x}` and `${F:+x}`;
+- concatenations such as `$a$b`;
+- `$HOME` as `~`, `$PWD` as `.`, `$TMPDIR` as `/tmp`;
+- the words inside `$(…)`.
+
+A variable with no known value also counts as empty, so `$DIR/.env` still yields `/.env`.
+
 Exempt: commands that only look at metadata or remove a file (`ls`, `stat`, `test`, `[`, `rm`, `touch`, `mkdir`, `chmod`, `realpath`, `dirname`, `basename`, `file`), and `git rm`, `git ls-files`, `git check-ignore` and `git status`.
 
 Also ⛔: `source <secret>` / `. <secret>` adds `sourcing a secrets file into the agent shell`.
@@ -385,6 +396,9 @@ grep API_KEY < .env       ⛔ access to secret material `.env` is blocked; …
 echo hi > .env            ⛔ access to secret material `.env` is blocked; …
 source .env               ⛔ access to secret material `.env` is blocked; …; sourcing a secrets file into the agent shell
 cat terraform.tfstate     ⛔ access to secret material `terraform.tfstate` is blocked; …
+f=.env; cat $f            ⛔ access to secret material `.env` is blocked; …
+cat ${F:-.env}            ⛔ access to secret material `.env` is blocked; …
+cat $HOME/.ssh/id_rsa     ⛔ access to secret material `id_rsa` is blocked; …
 
 cat .env.example          ✅
 ls -la .env               ✅
@@ -485,6 +499,24 @@ grep -rn TODO .             ✅
 **Limits.** Only `grep` and its variants are covered, and only the forms above. `rg` (ripgrep) isn't. The [Read guard](Guardrail-Read-Guard) covers the `Grep` tool's path and glob, and the deny rules cover common secret files.
 
 **False positive?** Approve it, or narrow the search to a source directory.
+
+#### `unresolved_variable`
+
+✋ **Ask.** A command that reads file contents gets an argument built from a shell value the hook can't resolve. Such commands include `cat`, `head`, `tail`, `less`, `grep`, `sed`, `awk`, `cp`, `mv`, `rsync`, `base64`, `xxd`, `jq`, `tar`, editors and `source`. Unresolvable values are positional parameters (`$1`), variables set by `read`, variables from the environment, and the output of `$(…)`. Variables the command assigns are expanded instead (see [`secret_file_access`](#secret_file_access)).
+
+```text
+cat $1                       ✋ `cat` reads a path built from a shell value the guard cannot resolve (`$1`); it may name a secrets file
+read f <<< .env; cat $f      ✋ `cat` reads a path built from a shell value the guard cannot resolve (`$f`); …
+source $ENVFILE              ✋ `source` reads a path built from a shell value the guard cannot resolve (`$ENVFILE`); …
+
+f=README.md; cat $f          ✅ (the value is known and harmless)
+echo $PATH                   ✅ (echo doesn't read files)
+ls $DIR                      ✅ (metadata only)
+```
+
+**Why.** The hook can't know what an unresolved value holds, and it could name `.env` or a key file. Asking costs one approval; allowing could put a secret into the context.
+
+**False positive?** Approve it, or write the path literally.
 
 ### Guardrails
 
@@ -841,7 +873,7 @@ See [Audit logs](Audit-Logs).
 
 ## Limits
 
-- **It's a parser plus patterns, not a shell.** It doesn't expand variables, follow aliases or functions, read scripts that a command runs, or know what a binary does. A script file can contain anything; the hook sees only `bash ./script.sh`.
+- **It's a parser plus patterns, not a shell.** It expands the variables a command assigns itself, and asks when a file-reading command uses a value it can't resolve (see [`unresolved_variable`](#unresolved_variable)). It doesn't follow aliases or functions, read scripts that a command runs, or know what a binary does. A script file can contain anything; the hook sees only `bash ./script.sh`.
 - **It can be wrong both ways.** Some safe commands are denied (`command -v curl`, `diskutil list`), and an attacker who studies the code may find a form it doesn't recognise. Report bypasses privately through [SECURITY.md](https://github.com/pixelofsoftware/AI-Mods/blob/main/SECURITY.md).
 - **It relies on the sandbox.** The OS sandbox's network and filesystem limits are what contain allowlisted test runners and anything the hook misses.
 

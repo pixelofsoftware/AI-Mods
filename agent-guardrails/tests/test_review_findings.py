@@ -121,3 +121,11 @@ def test_cursor_ask_override_is_narrow(fake):
     assert cursor("Write", {"path": "src/a.py", "content": big}, env=env)["permission"] == "deny"
     assert cursor("Write", {"content": "x"}, env=env)["permission"] == "deny"
     assert cursor("Write", {"path": "src/a.py", "content": f"ssn = '{fake.ssn}'"}, env=env)["permission"] == "deny"
+
+
+# Variable indirection: a secret path built from a shell variable is caught on every host.
+def test_secret_path_through_variable_on_every_host():
+    assert hook("cursor", "bash", {"command": "f=.env; cat $f"})[0]["permission"] == "deny"
+    assert copilot("bash", {"command": 'F=.env && cat "$F"'})["permissionDecision"] == "deny"
+    assert copilot("bash", {"command": "cat $1"})["permissionDecision"] == "ask"
+    assert copilot("write_bash", {"shellId": "1", "input": "cat ${F:-.env}{enter}"})["permissionDecision"] == "deny"

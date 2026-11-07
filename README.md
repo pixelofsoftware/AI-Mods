@@ -418,6 +418,7 @@ Parses real shell syntax: pipelines, `;`/`&&` chains, subshells, `$(…)` and ba
 | `dns_query` | `dig`, `nslookup`, `host`, `drill` (DNS exfiltration) |
 | `inline_network_code` | Network code in `python -c`, `node -e` or an interpreter heredoc; `python -m http.server` |
 | `secret_search` | Recursive `grep` for secret-like names |
+| `unresolved_variable` | A file-reading command (`cat`, `cp`, `grep`, `source`…) gets a path from a shell value the guard can't resolve, such as `$1` or `read` |
 | `insecure_permissions` | `chmod 777`, `a+rwx` |
 | `persistence` | `crontab`, `systemctl`, `launchctl` changes |
 | `anti_forensics` | `history -c`, `unset HISTFILE` |

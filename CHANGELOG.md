@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+
+- **Bash guard: secret paths passed through shell variables are now caught.** Before, `f=.env; cat $f` got no decision from the guard; only Claude Code's normal permission prompt stood in the way. The guard now expands the variables a command assigns itself, plus defaults, concatenations, `$HOME` and `$(…)`. It also asks (new rule `unresolved_variable`) when a file-reading command uses a value it can't resolve. The fix applies to both `.claude/hooks/bash_guard.py` and `agent-guardrails/`.
+
 ### Added
 
 - **`agent-guardrails/` package**: the same guardrails for Claude Code (plugin), Cursor and GitHub Copilot. It has one engine, an adapter for each tool, a shared skill and a project installer.
