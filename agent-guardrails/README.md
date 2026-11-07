@@ -29,11 +29,14 @@ Requires Python 3.9 or later on the developer's machine. Nothing else to install
 
 ### Claude Code: plugin
 
+In Claude Code:
+
 ```text
-git clone https://github.com/pixelofsoftware/AI-Mods.git
-/plugin marketplace add ./AI-Mods/agent-guardrails
+/plugin marketplace add pixelofsoftware/AI-Mods
 /plugin install agent-guardrails@agent-guardrails
 ```
+
+No clone needed: the repository root carries the marketplace (`.claude-plugin/marketplace.json`). From a local clone, `/plugin marketplace add ./AI-Mods` works too.
 
 The plugin brings the hooks and the skill. **Plugins can't carry permission rules or sandbox settings**, so for those also run the project install below with `--target claude`, or deploy them as managed settings.
 
@@ -58,7 +61,7 @@ It refuses to write through a symlink or outside the project, and checks every d
 
 | Tool | Mechanism | Users can't turn it off? |
 |---|---|---|
-| Claude Code | Managed settings: `extraKnownMarketplaces` + `enabledPlugins: {"agent-guardrails@agent-guardrails": true}`, plus `allowManagedHooksOnly` and `strictKnownMarketplaces`. Put the permission and sandbox template in the same file | Yes |
+| Claude Code | Managed settings: `extraKnownMarketplaces` (GitHub repo `pixelofsoftware/AI-Mods`, or your fork) + `enabledPlugins: {"agent-guardrails@agent-guardrails": true}`, plus `allowManagedHooksOnly` and `strictKnownMarketplaces`. Put the permission and sandbox template in the same file | Yes |
 | Cursor | Copy the runtime and a `hooks.json` with **absolute** paths to `/etc/cursor/hooks.json` (Linux), `/Library/Application Support/Cursor/hooks.json` (macOS) or `C:\ProgramData\Cursor\hooks.json` via MDM, or use the Enterprise dashboard | Yes (enterprise hooks run first) |
 | GitHub Copilot | Policy hooks in `/etc/github-copilot/policy.d/*.json` or `C:\ProgramData\GitHub\Copilot\policy.d\` (root-owned), with absolute paths to the runtime | Yes (`disableAllHooks` doesn't affect them) |
 
