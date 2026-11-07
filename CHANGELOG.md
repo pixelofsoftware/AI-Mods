@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- **`agent-guardrails/` package**: the same guardrails for Claude Code (plugin), Cursor and GitHub Copilot. It has one engine, an adapter for each tool, a shared skill and a project installer.
+- **Plugin marketplace at the repository root** (`.claude-plugin/marketplace.json`), so Claude Code users can run `/plugin marketplace add pixelofsoftware/AI-Mods` without cloning.
+
 ## [0.1.0] - 2026-10-27
 
 First public release.

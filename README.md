@@ -342,6 +342,19 @@ The configuration ships with **example values** for a fictional company. The gua
 | *AppSec*, *Platform Engineering*, `#appsec`, `#security-incidents` | [`docs/claude-guardrails.md`](docs/claude-guardrails.md) and the [setup guide](docs/claude-guardrails-setup.md) | Your teams and channels |
 | `@pixelofsoftware` | [`.github/CODEOWNERS`](.github/CODEOWNERS) | Your reviewers or GitHub teams |
 
+<a id="plugin"></a>
+
+### 6 · Claude Code plugin, Cursor and GitHub Copilot
+
+The same guardrails also ship as a package in [`agent-guardrails/`](agent-guardrails/): one engine, adapters for each tool's hooks, and a shared skill. In Claude Code, install it as a plugin with no clone:
+
+```text
+/plugin marketplace add pixelofsoftware/AI-Mods
+/plugin install agent-guardrails@agent-guardrails
+```
+
+For Cursor and Copilot, run `python3 agent-guardrails/install.py --target cursor|copilot --project /path/to/repo`. See the [package README](agent-guardrails/README.md) for what each tool supports and its limitations.
+
 <a id="guardrails"></a>
 
 ## 🛡️ Guardrails reference

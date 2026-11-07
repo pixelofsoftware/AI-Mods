@@ -24,6 +24,16 @@ def test_plugin_manifest_and_marketplace():
     assert market["plugins"][0]["name"] == plugin["name"] and market["plugins"][0]["source"] == "./"
 
 
+def test_repository_root_marketplace_points_at_this_plugin():
+    from conftest import REPO
+
+    root = json.loads((REPO / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    package = load(".claude-plugin/marketplace.json")
+    entry = root["plugins"][0]
+    assert root["name"] == package["name"] and entry["name"] == load(".claude-plugin/plugin.json")["name"]
+    assert (REPO / entry["source"]).resolve() == ROOT
+
+
 def test_plugin_hooks_cover_all_guards():
     hooks = load("hooks/hooks.json")["hooks"]
     commands = json.dumps(hooks)
